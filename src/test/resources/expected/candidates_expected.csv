@@ -1,0 +1,4 @@
+fullyQualifiedClassName,baselineFlag,sonarFlag,jdeodorantFlag,wmc,tcc,atfd,cbo,loc,methodCount,fieldCount,dependencyTypeCount,reasons
+com.example.Alpha,false,true,false,,,,,,1,0,0,
+com.example.Beta,true,false,true,47,0.25,6,21,200,10,5,8,METHODS_PLUS_FIELDS>40|DEPENDENCY_TYPES>5
+com.example.Gamma,false,false,false,12,0.9,1,2,50,2,1,1,DEPENDENCY_TYPES>5

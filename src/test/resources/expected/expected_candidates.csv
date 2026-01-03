@@ -1,0 +1,3 @@
+fullyQualifiedClassName,baselineFlag,sonarFlag,jdeodorantFlag,wmc,tcc,atfd,cbo,loc,methodCount,fieldCount,dependencyTypeCount,reasons
+com.example.mini.one.BigGod,false,false,false,,,,,,50,5,0,METHODS_PLUS_FIELDS>40
+com.example.mini.two.CoupledSmall,false,false,false,,,,,,2,1,6,DEPENDENCY_TYPES>5
