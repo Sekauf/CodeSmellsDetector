@@ -1,0 +1,19 @@
+{
+  "paging": {
+    "pageIndex": 1,
+    "pageSize": 100,
+    "total": 2
+  },
+  "issues": [
+    {
+      "component": "demo:src/main/java/com/example/mini/one/BigGod.java",
+      "textRange": {
+        "startLine": 12,
+        "endLine": 20
+      }
+    },
+    {
+      "component": "demo:com.example.mini.two.CohesiveLarge"
+    }
+  ]
+}

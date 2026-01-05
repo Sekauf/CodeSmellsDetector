@@ -1,0 +1,14 @@
+{
+  "paging": {
+    "pageIndex": 2,
+    "pageSize": 1,
+    "total": 2
+  },
+  "issues": [
+    {
+      "component": "demo:src/main/java/com/example/mini/two/CohesiveLarge.java",
+      "rule": "java:S001",
+      "message": "Not the target rule."
+    }
+  ]
+}

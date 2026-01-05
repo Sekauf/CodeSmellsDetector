@@ -1,0 +1,19 @@
+# Usage:
+#   docker-compose up -d
+#   ./scripts/sonar_wait_ready.sh
+#   powershell -File scripts/sonar_wait_ready.ps1
+#   docker-compose down
+#
+# Image selection:
+# - Default is the official LTS tag. Override with SONAR_IMAGE if you need a
+#   specific 2025.4 tag (if/when it is available on Docker Hub).
+services:
+  sonarqube:
+    image: "${SONAR_IMAGE:-sonarqube:lts-community}"
+    container_name: sonarqube
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      # Set via environment for local runs; do not commit secrets.
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+    restart: unless-stopped

@@ -1,0 +1,18 @@
+{
+  "paging": {
+    "pageIndex": 1,
+    "pageSize": 1,
+    "total": 2
+  },
+  "issues": [
+    {
+      "component": "demo:src/main/java/com/example/mini/one/BigGod.java",
+      "rule": "java:S6539",
+      "message": "Monster class detected.",
+      "textRange": {
+        "startLine": 12,
+        "endLine": 20
+      }
+    }
+  ]
+}

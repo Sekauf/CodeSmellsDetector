@@ -1,0 +1,19 @@
+{
+  "paging": {
+    "pageIndex": 1,
+    "pageSize": 50,
+    "total": 2
+  },
+  "issues": [
+    {
+      "component": "golden:src/main/java/com/example/golden/one/BigGod.java",
+      "rule": "java:S6539",
+      "message": "Monster class detected."
+    },
+    {
+      "component": "golden:src/main/java/com/example/golden/two/CoupledSmall.java",
+      "rule": "java:S6539",
+      "message": "Monster class detected."
+    }
+  ]
+}
