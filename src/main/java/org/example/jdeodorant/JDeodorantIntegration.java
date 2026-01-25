@@ -23,19 +23,25 @@ public class JDeodorantIntegration {
 
     public List<CandidateDTO> getJDeodorantCandidates(ProjectConfig cfg) throws IOException, InterruptedException {
         Objects.requireNonNull(cfg, "cfg");
+        LOGGER.info("JDeodorant candidate fetch started.");
         if (headlessRunner != null && cfg.isHeadlessEnabled()) {
             LOGGER.info("JDeodorant headless path used.");
-            return headlessRunner.run(cfg);
+            List<CandidateDTO> result = headlessRunner.run(cfg);
+            LOGGER.info("JDeodorant candidate fetch finished. Candidates=" + result.size());
+            return result;
         }
 
         String csvPath = cfg.getJdeodorantCsvPath();
         if (csvPath == null || csvPath.isBlank()) {
             LOGGER.warning("JDeodorant CSV path not set; returning empty list.");
+            LOGGER.info("JDeodorant candidate fetch finished. Candidates=0");
             return List.of();
         }
 
         LOGGER.info("JDeodorant manual CSV path used.");
-        return importer.importJDeodorantCsv(csvPath);
+        List<CandidateDTO> result = importer.importJDeodorantCsv(csvPath);
+        LOGGER.info("JDeodorant candidate fetch finished. Candidates=" + result.size());
+        return result;
     }
 
     public interface JDeodorantHeadlessRunner {

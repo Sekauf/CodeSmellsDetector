@@ -60,16 +60,19 @@ public class JDeodorantImporter {
         LOGGER.info("JDeodorant manual CSV import used: " + path);
         if (!Files.exists(path)) {
             LOGGER.warning("JDeodorant CSV file not found: " + path);
+            LOGGER.info("JDeodorant CSV import finished. Candidates=0");
             return List.of();
         }
 
         List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
         if (lines.isEmpty()) {
+            LOGGER.info("JDeodorant CSV import finished. Candidates=0");
             return List.of();
         }
 
         int headerIndex = firstNonEmptyLineIndex(lines);
         if (headerIndex < 0) {
+            LOGGER.info("JDeodorant CSV import finished. Candidates=0");
             return List.of();
         }
 
@@ -110,6 +113,7 @@ public class JDeodorantImporter {
 
         List<CandidateDTO> result = new ArrayList<>(candidates.values());
         result.sort(Comparator.comparing(CandidateDTO::getFullyQualifiedClassName));
+        LOGGER.info("JDeodorant CSV import finished. Candidates=" + result.size());
         return result;
     }
 

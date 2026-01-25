@@ -40,6 +40,7 @@ public class BaselineAnalyzer {
         JavaSourceParser parser = new JavaSourceParser();
         List<ParsedType> parsedTypes = parser.parseFiles(javaFiles);
         Map<Path, List<ParsedType>> typesByFile = groupByFile(parsedTypes);
+        LOGGER.info("Baseline analysis parsed types=" + parsedTypes.size());
 
         MetricsCalculator calculator = new MetricsCalculator();
         List<CandidateDTO> candidates = new ArrayList<>();

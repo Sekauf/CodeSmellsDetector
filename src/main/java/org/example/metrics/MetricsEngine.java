@@ -2,8 +2,11 @@ package org.example.metrics;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.logging.Logger;
 
 public final class MetricsEngine {
+    private static final Logger LOGGER = Logger.getLogger(MetricsEngine.class.getName());
+
     private MetricsEngine() {
     }
 
@@ -13,6 +16,11 @@ public final class MetricsEngine {
         }
         Set<String> predictedSet = normalizeSet(predicted);
         Set<String> actualSet = normalizeSet(actual);
+        LOGGER.info(
+                "MetricsEngine started. predicted=" + predictedSet.size()
+                        + " actual=" + actualSet.size()
+                        + " total=" + totalItems
+        );
 
         int truePositives = 0;
         for (String value : predictedSet) {
@@ -34,7 +42,14 @@ public final class MetricsEngine {
             throw new IllegalArgumentException("totalItems is smaller than tp+fp+fn.");
         }
 
-        return computeMetrics(truePositives, falsePositives, falseNegatives, trueNegatives);
+        EvaluationMetrics metrics = computeMetrics(truePositives, falsePositives, falseNegatives, trueNegatives);
+        LOGGER.info(
+                "MetricsEngine finished. tp=" + truePositives
+                        + " fp=" + falsePositives
+                        + " fn=" + falseNegatives
+                        + " tn=" + trueNegatives
+        );
+        return metrics;
     }
 
     public static EvaluationMetrics computeMetrics(
