@@ -20,41 +20,22 @@ public class Main {
                 printUsage();
                 return;
             }
-            if (parsed.projectPath == null || parsed.projectPath.isBlank()) {
-                System.err.println("Missing required --project <path>.");
-                printUsage();
-                System.exit(2);
-            }
 
             Path outputDir = parsed.outputPath == null ? Path.of("output") : Path.of(parsed.outputPath);
             LoggingConfigurator.configure(outputDir, true);
 
-            BaselineThresholds thresholds = new BaselineThresholds(
-                    parsed.baselineMethodsFieldsThreshold,
-                    parsed.baselineDependencyTypesThreshold
-            );
-
-            SonarConfig sonarConfig = parsed.runSonar
-                    ? SonarConfig.fromEnv(resolveProjectKey(parsed.projectPath))
-                    : null;
-            ProjectConfig jdeodorantConfig = parsed.jdeodorantCsvPath == null
-                    ? null
-                    : ProjectConfig.forJdeodorantCsv(parsed.jdeodorantCsvPath);
-
             AnalysisOrchestrator orchestrator = new AnalysisOrchestrator();
-            orchestrator.run(
-                    Path.of(parsed.projectPath),
-                    thresholds,
-                    sonarConfig,
-                    jdeodorantConfig,
-                    outputDir
-            );
+            if (parsed.evaluateMode) {
+                runEvaluateMode(parsed, orchestrator, outputDir);
+            } else {
+                runAnalyzeMode(parsed, orchestrator, outputDir);
+            }
         } catch (IllegalArgumentException ex) {
             System.err.println("Error: " + ex.getMessage());
             printUsage();
             System.exit(2);
         } catch (IOException | InterruptedException ex) {
-            LOGGER.log(Level.SEVERE, "Analysis run failed.", ex);
+            LOGGER.log(Level.SEVERE, "Run failed.", ex);
             System.exit(1);
         } catch (Exception ex) {
             LOGGER.log(Level.SEVERE, "Unexpected error.", ex);
@@ -62,17 +43,56 @@ public class Main {
         }
     }
 
+    private static void runEvaluateMode(
+            Arguments parsed, AnalysisOrchestrator orchestrator, Path outputDir) throws IOException {
+        if (parsed.labelsPath == null || parsed.labelsPath.isBlank()) {
+            System.err.println("--evaluate requires --labels <csv>");
+            printUsage();
+            System.exit(2);
+        }
+        Path secondReview = parsed.secondReviewLabelsPath == null
+                ? null : Path.of(parsed.secondReviewLabelsPath);
+        orchestrator.evaluate(Path.of(parsed.labelsPath), secondReview, outputDir);
+    }
+
+    private static void runAnalyzeMode(
+            Arguments parsed, AnalysisOrchestrator orchestrator, Path outputDir)
+            throws IOException, InterruptedException {
+        if (parsed.projectPath == null || parsed.projectPath.isBlank()) {
+            System.err.println("Missing required --project <path>.");
+            printUsage();
+            System.exit(2);
+        }
+        BaselineThresholds thresholds = new BaselineThresholds(
+                parsed.baselineMethodsFieldsThreshold,
+                parsed.baselineDependencyTypesThreshold);
+        SonarConfig sonarConfig = parsed.runSonar
+                ? SonarConfig.fromEnv(resolveProjectKey(parsed.projectPath)) : null;
+        ProjectConfig jdeodorantConfig = parsed.jdeodorantCsvPath == null
+                ? null : ProjectConfig.forJdeodorantCsv(parsed.jdeodorantCsvPath);
+        orchestrator.run(Path.of(parsed.projectPath), thresholds, sonarConfig, jdeodorantConfig, outputDir);
+    }
+
     private static void printUsage() {
         String usage = ""
                 + "Usage:\n"
                 + "  java -jar target/CodeSmellsDetector.jar --project <path> [options]\n"
+                + "  java -jar target/CodeSmellsDetector.jar --evaluate --labels <csv> [options]\n"
                 + "\n"
-                + "Options:\n"
+                + "Analyze options:\n"
+                + "  --project <path>                  Source project root\n"
                 + "  --output <dir>                    Output directory (default: output/)\n"
                 + "  --run-sonar                       Enable SonarQube analysis (config via env)\n"
                 + "  --jdeodorant-csv <path>           Import JDeodorant CSV export\n"
                 + "  --baseline-methods-fields <n>     Baseline size threshold (default: 40)\n"
                 + "  --baseline-dependency-types <n>   Baseline dependency threshold (default: 5)\n"
+                + "\n"
+                + "Evaluate options:\n"
+                + "  --evaluate                        Run evaluation mode\n"
+                + "  --labels <csv>                    Annotated labeling CSV (required for --evaluate)\n"
+                + "  --second-review-labels <csv>      Second-review CSV for reliability analysis\n"
+                + "  --output <dir>                    Output directory (default: output/)\n"
+                + "\n"
                 + "  --help                            Show this help\n";
         System.out.println(usage);
     }
@@ -92,6 +112,9 @@ public class Main {
         private String jdeodorantCsvPath;
         private boolean runSonar;
         private boolean showHelp;
+        private boolean evaluateMode;
+        private String labelsPath;
+        private String secondReviewLabelsPath;
         private int baselineMethodsFieldsThreshold = 40;
         private int baselineDependencyTypesThreshold = 5;
 
@@ -112,6 +135,12 @@ public class Main {
                     parsed.jdeodorantCsvPath = nextArg(args, ++i, "--jdeodorant-csv");
                 } else if ("--run-sonar".equals(arg)) {
                     parsed.runSonar = true;
+                } else if ("--evaluate".equals(arg)) {
+                    parsed.evaluateMode = true;
+                } else if ("--labels".equals(arg)) {
+                    parsed.labelsPath = nextArg(args, ++i, "--labels");
+                } else if ("--second-review-labels".equals(arg)) {
+                    parsed.secondReviewLabelsPath = nextArg(args, ++i, "--second-review-labels");
                 } else if ("--baseline-methods-fields".equals(arg)) {
                     String value = nextArg(args, ++i, "--baseline-methods-fields");
                     parsed.baselineMethodsFieldsThreshold = parsePositiveInt(value, "--baseline-methods-fields");
