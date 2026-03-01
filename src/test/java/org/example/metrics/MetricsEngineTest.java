@@ -75,6 +75,30 @@ public class MetricsEngineTest {
     }
 
     @Test
+    public void computeMetrics_specificity() {
+        // tp=1, fp=1, fn=1, tn=2 → specificity = 2/(2+1) = 2/3
+        Set<String> actual = new HashSet<>(Arrays.asList("A", "B"));
+        Set<String> predicted = new HashSet<>(Arrays.asList("A", "C"));
+
+        EvaluationMetrics metrics = MetricsEngine.computeMetrics(predicted, actual, 5);
+
+        assertEquals(2.0 / 3.0, metrics.getSpecificity(), 0.0001);
+    }
+
+    @Test
+    public void computeMetrics_specificity_divByZero_returnsZero() {
+        // All items are positive (tp+fp = total, tn=0, fp=0) → TN+FP = 0 → specificity = 0
+        Set<String> actual = new HashSet<>(Arrays.asList("A", "B"));
+        Set<String> predicted = new HashSet<>(Arrays.asList("A", "B"));
+
+        EvaluationMetrics metrics = MetricsEngine.computeMetrics(predicted, actual, 2);
+
+        assertEquals(0, metrics.getTrueNegatives());
+        assertEquals(0, metrics.getFalsePositives());
+        assertEquals(0.0, metrics.getSpecificity(), 0.0001);
+    }
+
+    @Test
     public void computeMetrics_invalidTotalItems_throws() {
         Set<String> actual = new HashSet<>(Arrays.asList("A", "B"));
         Set<String> predicted = new HashSet<>(Arrays.asList("C"));
