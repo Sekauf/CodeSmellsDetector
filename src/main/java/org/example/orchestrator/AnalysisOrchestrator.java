@@ -2,11 +2,14 @@ package org.example.orchestrator;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.logging.Logger;
+import org.example.labeling.LabelCsvExporter;
+import org.example.sampling.SamplingEngine;
 import org.example.baseline.BaselineAnalyzer;
 import org.example.baseline.BaselineThresholds;
 import org.example.baseline.CandidateDTO;
@@ -99,8 +102,10 @@ public class AnalysisOrchestrator {
         List<CandidateDTO> merged = mergeCandidates(baselineCandidates, sonarCandidates, jdeodorantCandidates);
         exporter.writeCsv(merged, outputDir);
         exporter.writeJson(merged, outputDir);
-        LOGGER.info("Orchestrator finished. candidates=" + merged.size());
-        return merged;
+        List<CandidateDTO> labelingInput = buildLabelingInput(merged);
+        new LabelCsvExporter().export(labelingInput, outputDir.resolve("labeling_input.csv"));
+        LOGGER.info("Orchestrator finished. candidates=" + labelingInput.size());
+        return labelingInput;
     }
 
     private List<CandidateDTO> mergeCandidates(
@@ -224,5 +229,28 @@ public class AnalysisOrchestrator {
             return left;
         }
         return right == null ? List.of() : right;
+    }
+
+    private static List<CandidateDTO> buildLabelingInput(List<CandidateDTO> merged) {
+        List<CandidateDTO> detected = new ArrayList<>();
+        for (CandidateDTO c : merged) {
+            if (c.isSonarFlag() || c.isJdeodorantFlag()) {
+                detected.add(c);
+            }
+        }
+        LOGGER.info("BlindNegativeSampling started. pool=" + merged.size()
+                + " detected=" + detected.size());
+        List<CandidateDTO> blindNegatives = SamplingEngine.sampleBlindNegativesTopPercentile(
+                merged,
+                5,
+                0.1,
+                42L,
+                c -> c.isSonarFlag() || c.isJdeodorantFlag(),
+                CandidateDTO::getMethodCount
+        );
+        LOGGER.info("BlindNegativeSampling finished. blindSamples=" + blindNegatives.size());
+        List<CandidateDTO> labelingInput = new ArrayList<>(detected);
+        labelingInput.addAll(blindNegatives);
+        return labelingInput;
     }
 }
