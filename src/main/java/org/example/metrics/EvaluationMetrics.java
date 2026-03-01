@@ -9,6 +9,7 @@ public class EvaluationMetrics {
     private final double recall;
     private final double f1Score;
     private final double mcc;
+    private final double specificity;
 
     public EvaluationMetrics(
             int truePositives,
@@ -18,7 +19,8 @@ public class EvaluationMetrics {
             double precision,
             double recall,
             double f1Score,
-            double mcc
+            double mcc,
+            double specificity
     ) {
         this.truePositives = truePositives;
         this.falsePositives = falsePositives;
@@ -28,6 +30,7 @@ public class EvaluationMetrics {
         this.recall = recall;
         this.f1Score = f1Score;
         this.mcc = mcc;
+        this.specificity = specificity;
     }
 
     public int getTruePositives() {
@@ -60,5 +63,10 @@ public class EvaluationMetrics {
 
     public double getMcc() {
         return mcc;
+    }
+
+    /** @return specificity (TN / (TN + FP)); 0.0 when TN + FP == 0 */
+    public double getSpecificity() {
+        return specificity;
     }
 }

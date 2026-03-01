@@ -66,6 +66,7 @@ public final class MetricsEngine {
         double recall = safeDivide(truePositives, truePositives + falseNegatives);
         double f1Score = (precision + recall) == 0.0 ? 0.0 : (2.0 * precision * recall) / (precision + recall);
         double mcc = computeMcc(truePositives, falsePositives, falseNegatives, trueNegatives);
+        double specificity = safeDivide(trueNegatives, trueNegatives + falsePositives);
 
         return new EvaluationMetrics(
                 truePositives,
@@ -75,7 +76,8 @@ public final class MetricsEngine {
                 precision,
                 recall,
                 f1Score,
-                mcc
+                mcc,
+                specificity
         );
     }
 
