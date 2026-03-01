@@ -23,7 +23,7 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 | US-08 | ✅ | Tool-Agreement (Jaccard) |
 | US-09 | ✅ | FP/FN-Listen pro Tool |
 | US-10 | ✅ | Metrics-Summary CSV |
-| US-11 | ⬜ | Markdown-Report |
+| US-11 | ✅ | Markdown-Report |
 | US-12 | ⬜ | CLI-Erweiterung (--evaluate) |
 | US-13 | ⬜ | E2E Integration Test |
 | US-14 | ⬜ | README-Doku |
