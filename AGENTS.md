@@ -20,7 +20,7 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 | US-05 | ✅ | Zweitbewertung + Reliabilität |
 | US-06 | ✅ | Specificity in EvaluationMetrics |
 | US-07 | ✅ | Tool-Evaluation gegen Ground Truth |
-| US-08 | ⬜ | Tool-Agreement (Jaccard) |
+| US-08 | ✅ | Tool-Agreement (Jaccard) |
 | US-09 | ⬜ | FP/FN-Listen pro Tool |
 | US-10 | ⬜ | Metrics-Summary CSV |
 | US-11 | ⬜ | Markdown-Report |
