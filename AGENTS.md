@@ -16,7 +16,7 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 | US-01 | ✅ | LabelDTO + Labeling-CSV-Export |
 | US-02 | ✅ | Labeling-CSV-Import |
 | US-03 | ✅ | Blind-Negativ-Samples einbinden |
-| US-04 | ⬜ | Ground-Truth-Export |
+| US-04 | ✅ | Ground-Truth-Export |
 | US-05 | ⬜ | Zweitbewertung + Reliabilität |
 | US-06 | ⬜ | Specificity in EvaluationMetrics |
 | US-07 | ⬜ | Tool-Evaluation gegen Ground Truth |
