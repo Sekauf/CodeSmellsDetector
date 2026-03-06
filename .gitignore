@@ -36,3 +36,16 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+# Analyse-Output (contains local paths)
+output/
+
+# Local artifacts
+mnt/
+
+# Environment / credentials
+.env
+.env.*
+
+# Full IDE directory (specific files already listed above)
+.idea/
