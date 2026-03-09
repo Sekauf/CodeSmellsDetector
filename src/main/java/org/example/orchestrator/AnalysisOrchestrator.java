@@ -81,6 +81,11 @@ public class AnalysisOrchestrator {
         this.exporter = Objects.requireNonNull(exporter, "exporter");
     }
 
+    /**
+     * Runs the full analysis pipeline without progress reporting.
+     *
+     * @see #run(Path, BaselineThresholds, SonarConfig, ProjectConfig, Path, ProgressCallback)
+     */
     public List<CandidateDTO> run(
             Path projectRoot,
             BaselineThresholds thresholds,
@@ -88,41 +93,69 @@ public class AnalysisOrchestrator {
             ProjectConfig jdeodorantConfig,
             Path outputDir
     ) throws IOException, InterruptedException {
+        return run(projectRoot, thresholds, sonarConfig, jdeodorantConfig, outputDir, ProgressCallback.NOOP);
+    }
+
+    /**
+     * Runs the full analysis pipeline and reports progress via {@code callback}.
+     *
+     * <p>The callback is invoked before and after each major step; disabled tools are skipped
+     * and the percentage jumps accordingly.</p>
+     *
+     * @param callback receives step labels and percentages (0–100) during execution
+     */
+    public List<CandidateDTO> run(
+            Path projectRoot,
+            BaselineThresholds thresholds,
+            SonarConfig sonarConfig,
+            ProjectConfig jdeodorantConfig,
+            Path outputDir,
+            ProgressCallback callback
+    ) throws IOException, InterruptedException {
         LOGGER.info("Orchestrator started.");
+        callback.onStep("Analyse wird vorbereitet\u2026", 5);
 
         List<CandidateDTO> baselineCandidates = List.of();
         if (projectRoot != null && thresholds != null) {
+            callback.onStep("Baseline-Analyse l\u00e4uft\u2026", 15);
             LOGGER.info("BaselineAnalyzer started.");
             baselineCandidates = baselineRunner.run(projectRoot, thresholds);
             LOGGER.info("BaselineAnalyzer finished. candidates=" + baselineCandidates.size());
+            callback.onStep("Baseline abgeschlossen", 35);
         } else {
             LOGGER.info("BaselineAnalyzer skipped.");
         }
 
         List<CandidateDTO> sonarCandidates = List.of();
         if (projectRoot != null && sonarConfig != null) {
+            callback.onStep("SonarQube-Scan l\u00e4uft\u2026", 40);
             LOGGER.info("SonarAnalyzer started.");
             sonarCandidates = sonarRunner.run(projectRoot, sonarConfig);
             LOGGER.info("SonarAnalyzer finished. candidates=" + sonarCandidates.size());
+            callback.onStep("SonarQube abgeschlossen", 65);
         } else {
             LOGGER.info("SonarAnalyzer skipped.");
         }
 
         List<CandidateDTO> jdeodorantCandidates = List.of();
         if (jdeodorantConfig != null) {
+            callback.onStep("JDeodorant-Import l\u00e4uft\u2026", 70);
             LOGGER.info("JDeodorantIntegration started.");
             jdeodorantCandidates = jdeodorantRunner.run(jdeodorantConfig);
             LOGGER.info("JDeodorantIntegration finished. candidates=" + jdeodorantCandidates.size());
+            callback.onStep("JDeodorant abgeschlossen", 80);
         } else {
             LOGGER.info("JDeodorantIntegration skipped.");
         }
 
+        callback.onStep("Merge & Export\u2026", 85);
         List<CandidateDTO> merged = mergeCandidates(baselineCandidates, sonarCandidates, jdeodorantCandidates);
         exporter.writeCsv(merged, outputDir);
         exporter.writeJson(merged, outputDir);
         List<CandidateDTO> labelingInput = buildLabelingInput(merged);
         new LabelCsvExporter().export(labelingInput, outputDir.resolve("labeling_input.csv"));
         LOGGER.info("Orchestrator finished. candidates=" + labelingInput.size());
+        callback.onStep("Abgeschlossen", 100);
         return labelingInput;
     }
 

@@ -13,6 +13,8 @@ import org.example.sonar.SonarConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.example.orchestrator.ProgressCallback;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -81,6 +83,33 @@ class AnalysisOrchestratorTest {
                 || content.contains("Base57") || content.contains("Base58")
                 || content.contains("Base59") || content.contains("Base60");
         assertTrue(hasHighBase, "CSV must contain at least one of Base55–Base60 as blind negative");
+    }
+
+    /**
+     * S-05: Verifies that ProgressCallback is invoked at least 5 times and ends at 100%.
+     */
+    @Test
+    void run_withCallback_invokesCallbackAtLeastFiveTimesAndEndsAt100()
+            throws IOException, InterruptedException {
+        AnalysisOrchestrator orchestrator = new AnalysisOrchestrator(
+                (root, t) -> List.of(makeSonar("A")),
+                (root, c) -> List.of(makeSonar("A")),
+                cfg -> List.of(),
+                new ResultExporter()
+        );
+        SonarConfig sonarConfig = SonarConfig.builder()
+                .hostUrl("http://localhost:9000")
+                .projectKey("cb-test")
+                .build();
+
+        List<String> steps = new ArrayList<>();
+        List<Integer> percents = new ArrayList<>();
+        ProgressCallback callback = (label, pct) -> { steps.add(label); percents.add(pct); };
+
+        orchestrator.run(tempDir, new BaselineThresholds(1, 1), sonarConfig, null, tempDir, callback);
+
+        assertTrue(steps.size() >= 5, "Expected at least 5 progress steps, got " + steps.size());
+        assertEquals(100, percents.get(percents.size() - 1), "Last progress value must be 100");
     }
 
     private static CandidateDTO makeSonar(String fqcn) {
