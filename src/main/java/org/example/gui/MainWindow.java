@@ -99,10 +99,11 @@ public class MainWindow extends JFrame {
         g.weighty = 0; g.fill = GridBagConstraints.HORIZONTAL;
         r++;
 
-        // Run button — disabled when no tool is enabled
+        // Run button — disabled when no valid project selected or no tool enabled
         runBtn = new JButton("Analyse starten");
         runBtn.addActionListener(e -> onRunAnalysis());
         toolConfigPanel.addEnablementListener(this::updateRunButtonState);
+        projectPathPanel.addPathChangeListener(path -> updateRunButtonState());
         updateRunButtonState();
 
         g.gridx = 0; g.gridy = r; g.gridwidth = 3; g.anchor = GridBagConstraints.CENTER;
@@ -191,6 +192,8 @@ public class MainWindow extends JFrame {
         var jdConfig    = toolConfigPanel.getJDeodorantConfig();
 
         logArea.setText("");
+        runBtn.setText("Läuft\u2026");
+        runBtn.setEnabled(false);
         cardLayout.show(cards, CARD_PROGRESS);
         worker = new AnalysisWorker(this, projectRootPath, thresholds, sonarConfig, jdConfig, currentOutputDir);
         worker.execute();
@@ -206,6 +209,8 @@ public class MainWindow extends JFrame {
 
     /** Called on EDT by {@link AnalysisWorker#done()} on success. */
     public void onAnalysisComplete(Path outputDir) {
+        runBtn.setText("Analyse starten");
+        updateRunButtonState();
         progressBar.setIndeterminate(false);
         progressBar.setValue(100);
 
@@ -234,6 +239,8 @@ public class MainWindow extends JFrame {
 
     /** Called on EDT by {@link AnalysisWorker#done()} on failure. */
     public void onAnalysisFailed(Throwable error) {
+        runBtn.setText("Analyse starten");
+        updateRunButtonState();
         progressBar.setIndeterminate(false);
         JOptionPane.showMessageDialog(this,
                 "Analyse fehlgeschlagen:\n" + error.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
@@ -241,7 +248,10 @@ public class MainWindow extends JFrame {
     }
 
     private void updateRunButtonState() {
-        runBtn.setEnabled(toolConfigPanel.isAtLeastOneEnabled());
+        String path = projectPathPanel.getSelectedPath();
+        boolean projectValid = !path.isEmpty()
+                && new ProjectValidator().validate(Path.of(path)).isValid();
+        runBtn.setEnabled(projectValid && toolConfigPanel.isAtLeastOneEnabled());
     }
 
     private void openOutputFolder() {
