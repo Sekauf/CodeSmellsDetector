@@ -74,6 +74,16 @@ public class ProjectPathPanel extends JPanel {
     }
 
     /**
+     * Registers a listener that is called with the new path string whenever
+     * the user selects or types a path.
+     *
+     * @param listener consumer receiving the current path (may be empty)
+     */
+    public void addPathChangeListener(java.util.function.Consumer<String> listener) {
+        pathCombo.addActionListener(e -> listener.accept(getSelectedPath()));
+    }
+
+    /**
      * Sets the path programmatically, triggers live validation, and updates the UI.
      *
      * @param path absolute path string

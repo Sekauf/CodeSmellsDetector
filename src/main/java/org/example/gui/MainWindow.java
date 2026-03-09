@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -25,7 +24,6 @@ import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
-import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import org.example.baseline.CandidateCsvUtil;
 
@@ -44,7 +42,7 @@ public class MainWindow extends JFrame {
 
     // Setup fields
     private ProjectPathPanel projectPathPanel;
-    private JTextField       outputDirField;
+    private OutputPathPanel  outputPathPanel;
     private ToolConfigPanel  toolConfigPanel;
     private JButton          runBtn;
 
@@ -82,11 +80,16 @@ public class MainWindow extends JFrame {
         g.fill   = GridBagConstraints.HORIZONTAL;
         int r = 0;
 
-        // Project path + output dir
+        // Project path
         projectPathPanel = new ProjectPathPanel();
-        outputDirField   = new JTextField("output");
         addLabeledPanel(p, g, r++, "Project Root:", projectPathPanel);
-        addRow(p, g, r++, "Output Dir:",   outputDirField, browseDir(outputDirField));
+
+        // Output path panel (auto-suggests project name from selected root)
+        outputPathPanel = new OutputPathPanel();
+        projectPathPanel.addPathChangeListener(outputPathPanel::suggestProjectName);
+        g.gridx = 0; g.gridy = r++; g.gridwidth = 3; g.weightx = 1;
+        p.add(outputPathPanel, g);
+        g.gridwidth = 1; g.weightx = 0;
 
         // Tool configuration tabs (grows to fill remaining vertical space)
         toolConfigPanel = new ToolConfigPanel();
@@ -169,11 +172,22 @@ public class MainWindow extends JFrame {
         }
 
         Path projectRootPath = Path.of(root);
-        String outText = outputDirField.getText().trim();
-        currentOutputDir = Path.of(outText.isEmpty() ? "output" : outText);
+        currentOutputDir = outputPathPanel.getResolvedOutputPath();
+        try {
+            new OutputPathResolver().ensureExists(currentOutputDir);
+        } catch (java.io.IOException ex) {
+            JOptionPane.showMessageDialog(this, "Output-Verzeichnis konnte nicht erstellt werden:\n" + ex.getMessage(),
+                    "Fehler", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        String projectName = outputPathPanel.getProjectName();
+        if (projectName.isBlank()) {
+            projectName = projectRootPath.getFileName().toString();
+        }
 
         var thresholds  = toolConfigPanel.getBaselineThresholds();
-        var sonarConfig = toolConfigPanel.getSonarConfig(projectRootPath.getFileName().toString());
+        var sonarConfig = toolConfigPanel.getSonarConfig(projectName);
         var jdConfig    = toolConfigPanel.getJDeodorantConfig();
 
         logArea.setText("");
@@ -243,18 +257,6 @@ public class MainWindow extends JFrame {
     // Layout helpers
     // -------------------------------------------------------------------------
 
-    private JButton browseDir(JTextField field) {
-        JButton btn = new JButton("Browse\u2026");
-        btn.addActionListener(e -> {
-            JFileChooser fc = new JFileChooser();
-            fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                field.setText(fc.getSelectedFile().getAbsolutePath());
-            }
-        });
-        return btn;
-    }
-
     /** Adds label + panel spanning the field and button columns. */
     private void addLabeledPanel(JPanel p, GridBagConstraints g, int row,
             String label, JPanel panel) {
@@ -265,14 +267,4 @@ public class MainWindow extends JFrame {
         g.gridwidth = 1; g.weightx = 0;
     }
 
-    /** Adds label + field + optional button in a single row. */
-    private void addRow(JPanel p, GridBagConstraints g, int row,
-            String label, JTextField field, JButton btn) {
-        g.gridx = 0; g.gridy = row; g.gridwidth = 1; g.weightx = 0; g.anchor = GridBagConstraints.WEST;
-        p.add(new JLabel(label), g);
-        g.gridx = 1; g.weightx = 1;
-        p.add(field, g);
-        g.gridx = 2; g.weightx = 0;
-        p.add(btn != null ? btn : new JLabel(), g);
-    }
 }
