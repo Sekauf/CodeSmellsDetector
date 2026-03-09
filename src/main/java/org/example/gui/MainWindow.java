@@ -16,27 +16,18 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
-import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
-import javax.swing.JSeparator;
-import javax.swing.JSpinner;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
-import javax.swing.filechooser.FileNameExtensionFilter;
-import org.example.baseline.BaselineThresholds;
 import org.example.baseline.CandidateCsvUtil;
-import org.example.jdeodorant.ProjectConfig;
-import org.example.sonar.SonarConfig;
 
 /**
  * Three-card GUI: SETUP → PROGRESS → RESULTS.
@@ -44,41 +35,38 @@ import org.example.sonar.SonarConfig;
  */
 public class MainWindow extends JFrame {
 
-    private static final String CARD_SETUP = "SETUP";
+    private static final String CARD_SETUP    = "SETUP";
     private static final String CARD_PROGRESS = "PROGRESS";
-    private static final String CARD_RESULTS = "RESULTS";
+    private static final String CARD_RESULTS  = "RESULTS";
 
     private final CardLayout cardLayout = new CardLayout();
-    private final JPanel cards = new JPanel(cardLayout);
+    private final JPanel     cards      = new JPanel(cardLayout);
 
     // Setup fields
     private ProjectPathPanel projectPathPanel;
-    private JTextField outputDirField;
-    private JSpinner methodFieldSpinner;
-    private JSpinner depTypeSpinner;
-    private JCheckBox sonarCheckBox;
-    private JTextField sonarHostField;
-    private JTextField sonarTokenField;
-    private JTextField jdeodorantCsvField;
+    private JTextField       outputDirField;
+    private ToolConfigPanel  toolConfigPanel;
+    private JButton          runBtn;
 
     // Progress fields
-    private JTextArea logArea;
+    private JTextArea    logArea;
     private JProgressBar progressBar;
     private AnalysisWorker worker;
 
     // Results fields
     private JLabel summaryLabel;
     private JTable resultsTable;
-    private Path currentOutputDir;
+    private Path   currentOutputDir;
 
+    /** Constructs and wires the three-card window. */
     public MainWindow() {
         super("CodeSmellsDetector");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(960, 680);
+        setSize(960, 720);
         setLocationRelativeTo(null);
-        cards.add(buildSetupCard(), CARD_SETUP);
+        cards.add(buildSetupCard(),    CARD_SETUP);
         cards.add(buildProgressCard(), CARD_PROGRESS);
-        cards.add(buildResultsCard(), CARD_RESULTS);
+        cards.add(buildResultsCard(),  CARD_RESULTS);
         add(cards);
     }
 
@@ -91,36 +79,29 @@ public class MainWindow extends JFrame {
         p.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         GridBagConstraints g = new GridBagConstraints();
         g.insets = new Insets(3, 4, 3, 4);
-        g.fill = GridBagConstraints.HORIZONTAL;
+        g.fill   = GridBagConstraints.HORIZONTAL;
         int r = 0;
 
+        // Project path + output dir
         projectPathPanel = new ProjectPathPanel();
-        outputDirField = new JTextField("output");
+        outputDirField   = new JTextField("output");
         addLabeledPanel(p, g, r++, "Project Root:", projectPathPanel);
-        addRow(p, g, r++, "Output Dir:",   outputDirField,   browseDir(outputDirField));
+        addRow(p, g, r++, "Output Dir:",   outputDirField, browseDir(outputDirField));
 
-        addSection(p, g, r++, "Baseline Thresholds");
-        methodFieldSpinner = new JSpinner(new SpinnerNumberModel(40, 1, 9999, 1));
-        depTypeSpinner     = new JSpinner(new SpinnerNumberModel(5,  1, 9999, 1));
-        JPanel thresh = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        thresh.add(new JLabel("Methods+Fields:")); thresh.add(methodFieldSpinner);
-        thresh.add(new JLabel("  DepTypes:"));     thresh.add(depTypeSpinner);
-        addFull(p, g, r++, thresh);
+        // Tool configuration tabs (grows to fill remaining vertical space)
+        toolConfigPanel = new ToolConfigPanel();
+        g.gridx = 0; g.gridy = r; g.gridwidth = 3; g.weightx = 1; g.weighty = 1;
+        g.fill  = GridBagConstraints.BOTH;
+        p.add(toolConfigPanel, g);
+        g.weighty = 0; g.fill = GridBagConstraints.HORIZONTAL;
+        r++;
 
-        addSection(p, g, r++, "SonarQube (optional)");
-        sonarCheckBox = new JCheckBox("Enable SonarQube");
-        addFull(p, g, r++, sonarCheckBox);
-        sonarHostField  = new JTextField("http://localhost:9000");
-        sonarTokenField = new JTextField();
-        addRow(p, g, r++, "Host:",  sonarHostField,  null);
-        addRow(p, g, r++, "Token:", sonarTokenField, null);
-
-        addSection(p, g, r++, "JDeodorant (optional)");
-        jdeodorantCsvField = new JTextField(42);
-        addRow(p, g, r++, "CSV Path:", jdeodorantCsvField, browseCsvBtn(jdeodorantCsvField));
-
-        JButton runBtn = new JButton("Run Analysis");
+        // Run button — disabled when no tool is enabled
+        runBtn = new JButton("Analyse starten");
         runBtn.addActionListener(e -> onRunAnalysis());
+        toolConfigPanel.addEnablementListener(this::updateRunButtonState);
+        updateRunButtonState();
+
         g.gridx = 0; g.gridy = r; g.gridwidth = 3; g.anchor = GridBagConstraints.CENTER;
         p.add(runBtn, g);
         return p;
@@ -129,7 +110,7 @@ public class MainWindow extends JFrame {
     private JPanel buildProgressCard() {
         JPanel p = new JPanel(new BorderLayout(4, 4));
         p.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        p.add(new JLabel("Analysis in progress…"), BorderLayout.NORTH);
+        p.add(new JLabel("Analyse läuft\u2026"), BorderLayout.NORTH);
 
         logArea = new JTextArea();
         logArea.setEditable(false);
@@ -138,11 +119,11 @@ public class MainWindow extends JFrame {
 
         progressBar = new JProgressBar();
         progressBar.setIndeterminate(true);
-        JButton cancelBtn = new JButton("Cancel");
+        JButton cancelBtn = new JButton("Abbrechen");
         cancelBtn.addActionListener(e -> { if (worker != null) worker.cancel(true); });
         JPanel south = new JPanel(new BorderLayout(4, 0));
         south.add(progressBar, BorderLayout.CENTER);
-        south.add(cancelBtn, BorderLayout.EAST);
+        south.add(cancelBtn,   BorderLayout.EAST);
         p.add(south, BorderLayout.SOUTH);
         return p;
     }
@@ -150,16 +131,16 @@ public class MainWindow extends JFrame {
     private JPanel buildResultsCard() {
         JPanel p = new JPanel(new BorderLayout(4, 4));
         p.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        summaryLabel = new JLabel("Analysis complete.");
+        summaryLabel = new JLabel("Analyse abgeschlossen.");
         p.add(summaryLabel, BorderLayout.NORTH);
 
         resultsTable = new JTable(new ResultsTableModel(List.of()));
         resultsTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         p.add(new JScrollPane(resultsTable), BorderLayout.CENTER);
 
-        JButton openBtn = new JButton("Open Output Folder");
+        JButton openBtn = new JButton("Ausgabeordner öffnen");
         openBtn.addActionListener(e -> openOutputFolder());
-        JButton newBtn = new JButton("New Analysis");
+        JButton newBtn = new JButton("Neue Analyse");
         newBtn.addActionListener(e -> cardLayout.show(cards, CARD_SETUP));
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         south.add(openBtn); south.add(newBtn);
@@ -182,30 +163,18 @@ public class MainWindow extends JFrame {
             JOptionPane.showMessageDialog(this, validation.message(), "Ungültiges Projektverzeichnis", JOptionPane.ERROR_MESSAGE);
             return;
         }
+        if (!toolConfigPanel.isAtLeastOneEnabled()) {
+            JOptionPane.showMessageDialog(this, "Mindestens ein Tool muss aktiviert sein.", "Konfiguration", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         Path projectRootPath = Path.of(root);
         String outText = outputDirField.getText().trim();
         currentOutputDir = Path.of(outText.isEmpty() ? "output" : outText);
 
-        BaselineThresholds thresholds = new BaselineThresholds(
-                (Integer) methodFieldSpinner.getValue(),
-                (Integer) depTypeSpinner.getValue());
-
-        SonarConfig sonarConfig = null;
-        if (sonarCheckBox.isSelected()) {
-            String host  = sonarHostField.getText().trim();
-            String token = sonarTokenField.getText().trim();
-            sonarConfig = SonarConfig.builder()
-                    .hostUrl(host.isEmpty() ? "http://localhost:9000" : host)
-                    .token(token.isEmpty() ? null : token)
-                    .projectKey(projectRootPath.getFileName().toString())
-                    .build();
-        }
-
-        ProjectConfig jdConfig = null;
-        String jdCsv = jdeodorantCsvField.getText().trim();
-        if (!jdCsv.isEmpty()) {
-            jdConfig = ProjectConfig.forJdeodorantCsv(jdCsv);
-        }
+        var thresholds  = toolConfigPanel.getBaselineThresholds();
+        var sonarConfig = toolConfigPanel.getSonarConfig(projectRootPath.getFileName().toString());
+        var jdConfig    = toolConfigPanel.getJDeodorantConfig();
 
         logArea.setText("");
         cardLayout.show(cards, CARD_PROGRESS);
@@ -239,11 +208,11 @@ public class MainWindow extends JFrame {
                 if (fields.size() > 3 && "true".equalsIgnoreCase(fields.get(3))) jdeoCount++;
             }
         } catch (Exception e) {
-            appendLog("Warning: could not read results.csv: " + e.getMessage());
+            appendLog("Warnung: results.csv konnte nicht gelesen werden: " + e.getMessage());
         }
 
         summaryLabel.setText(String.format(
-                "Analysis complete. Found %d candidates  (Sonar: %d | JDeodorant: %d)",
+                "Analyse abgeschlossen. %d Kandidaten gefunden  (Sonar: %d | JDeodorant: %d)",
                 rows.size(), sonarCount, jdeoCount));
         resultsTable.setModel(new ResultsTableModel(rows));
         cardLayout.show(cards, CARD_RESULTS);
@@ -253,8 +222,12 @@ public class MainWindow extends JFrame {
     public void onAnalysisFailed(Throwable error) {
         progressBar.setIndeterminate(false);
         JOptionPane.showMessageDialog(this,
-                "Analysis failed:\n" + error.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                "Analyse fehlgeschlagen:\n" + error.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
         cardLayout.show(cards, CARD_SETUP);
+    }
+
+    private void updateRunButtonState() {
+        runBtn.setEnabled(toolConfigPanel.isAtLeastOneEnabled());
     }
 
     private void openOutputFolder() {
@@ -262,7 +235,7 @@ public class MainWindow extends JFrame {
         try {
             Desktop.getDesktop().open(dir.exists() ? dir : new File("."));
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Cannot open folder: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Ordner kann nicht geöffnet werden: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -292,18 +265,6 @@ public class MainWindow extends JFrame {
         g.gridwidth = 1; g.weightx = 0;
     }
 
-    private JButton browseCsvBtn(JTextField field) {
-        JButton btn = new JButton("Browse…");
-        btn.addActionListener(e -> {
-            JFileChooser fc = new JFileChooser();
-            fc.setFileFilter(new FileNameExtensionFilter("CSV files", "csv"));
-            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                field.setText(fc.getSelectedFile().getAbsolutePath());
-            }
-        });
-        return btn;
-    }
-
     /** Adds label + field + optional button in a single row. */
     private void addRow(JPanel p, GridBagConstraints g, int row,
             String label, JTextField field, JButton btn) {
@@ -313,23 +274,5 @@ public class MainWindow extends JFrame {
         p.add(field, g);
         g.gridx = 2; g.weightx = 0;
         p.add(btn != null ? btn : new JLabel(), g);
-    }
-
-    /** Adds a section title + horizontal separator spanning all columns. */
-    private void addSection(JPanel p, GridBagConstraints g, int row, String title) {
-        g.gridx = 0; g.gridy = row; g.gridwidth = 3; g.weightx = 1;
-        JPanel sep = new JPanel(new BorderLayout(6, 0));
-        JLabel lbl = new JLabel(title);
-        lbl.setFont(lbl.getFont().deriveFont(Font.BOLD));
-        sep.add(lbl, BorderLayout.WEST);
-        sep.add(new JSeparator(), BorderLayout.CENTER);
-        p.add(sep, g);
-        g.gridwidth = 1; g.weightx = 0;
-    }
-
-    private void addFull(JPanel p, GridBagConstraints g, int row, JComponent inner) {
-        g.gridx = 0; g.gridy = row; g.gridwidth = 3;
-        p.add(inner, g);
-        g.gridwidth = 1;
     }
 }
