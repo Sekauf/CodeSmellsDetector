@@ -6,11 +6,13 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import org.example.baseline.BaselineThresholds;
 import org.example.jdeodorant.ProjectConfig;
 import org.example.logging.LoggingConfigurator;
 import org.example.orchestrator.AnalysisOrchestrator;
+import org.example.orchestrator.ProgressCallback;
 import org.example.sonar.SonarConfig;
 
 /**
@@ -55,8 +57,11 @@ public class AnalysisWorker extends SwingWorker<Void, String> {
         guiHandler.setLevel(Level.INFO);
         root.addHandler(guiHandler);
 
+        ProgressCallback progressCallback = (label, percent) ->
+                SwingUtilities.invokeLater(() -> owner.updateProgress(label, percent));
         try {
-            new AnalysisOrchestrator().run(projectRoot, thresholds, sonarConfig, jdeodorantConfig, outputDir);
+            new AnalysisOrchestrator().run(
+                    projectRoot, thresholds, sonarConfig, jdeodorantConfig, outputDir, progressCallback);
         } finally {
             root.removeHandler(guiHandler);
         }

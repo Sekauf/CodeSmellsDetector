@@ -47,6 +47,7 @@ public class MainWindow extends JFrame {
     private JButton          runBtn;
 
     // Progress fields
+    private JLabel       stepLabel;
     private JTextArea    logArea;
     private JProgressBar progressBar;
     private AnalysisWorker worker;
@@ -114,15 +115,16 @@ public class MainWindow extends JFrame {
     private JPanel buildProgressCard() {
         JPanel p = new JPanel(new BorderLayout(4, 4));
         p.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        p.add(new JLabel("Analyse läuft\u2026"), BorderLayout.NORTH);
+        stepLabel = new JLabel("Analyse l\u00e4uft\u2026");
+        p.add(stepLabel, BorderLayout.NORTH);
 
         logArea = new JTextArea();
         logArea.setEditable(false);
         logArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         p.add(new JScrollPane(logArea), BorderLayout.CENTER);
 
-        progressBar = new JProgressBar();
-        progressBar.setIndeterminate(true);
+        progressBar = new JProgressBar(0, 100);
+        progressBar.setStringPainted(true);
         JButton cancelBtn = new JButton("Abbrechen");
         cancelBtn.addActionListener(e -> { if (worker != null) worker.cancel(true); });
         JPanel south = new JPanel(new BorderLayout(4, 0));
@@ -192,7 +194,9 @@ public class MainWindow extends JFrame {
         var jdConfig    = toolConfigPanel.getJDeodorantConfig();
 
         logArea.setText("");
-        runBtn.setText("Läuft\u2026");
+        stepLabel.setText("Analyse wird vorbereitet\u2026");
+        progressBar.setValue(0);
+        runBtn.setText("L\u00e4uft\u2026");
         runBtn.setEnabled(false);
         cardLayout.show(cards, CARD_PROGRESS);
         worker = new AnalysisWorker(this, projectRootPath, thresholds, sonarConfig, jdConfig, currentOutputDir);
@@ -207,11 +211,16 @@ public class MainWindow extends JFrame {
         });
     }
 
+    /** Called on EDT by {@link AnalysisWorker} to update the step label and progress bar. */
+    public void updateProgress(String label, int percent) {
+        stepLabel.setText(label);
+        progressBar.setValue(percent);
+    }
+
     /** Called on EDT by {@link AnalysisWorker#done()} on success. */
     public void onAnalysisComplete(Path outputDir) {
         runBtn.setText("Analyse starten");
         updateRunButtonState();
-        progressBar.setIndeterminate(false);
         progressBar.setValue(100);
 
         List<String[]> rows = new ArrayList<>();
@@ -241,7 +250,6 @@ public class MainWindow extends JFrame {
     public void onAnalysisFailed(Throwable error) {
         runBtn.setText("Analyse starten");
         updateRunButtonState();
-        progressBar.setIndeterminate(false);
         JOptionPane.showMessageDialog(this,
                 "Analyse fehlgeschlagen:\n" + error.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
         cardLayout.show(cards, CARD_SETUP);
