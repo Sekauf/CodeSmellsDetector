@@ -34,7 +34,7 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 | Story | Priorität | SP | Status | Beschreibung |
 |-------|-----------|-----|--------|-------------|
 | S-01 | Must-Have | 3 | ✅ | Projektverzeichnis auswählen (FileChooser + D&D + Verlauf) |
-| S-02 | Must-Have | 5 | ⬜ | Tool-Konfiguration übersichtlich darstellen (TabbedPane) |
+| S-02 | Must-Have | 5 | ✅ | Tool-Konfiguration übersichtlich darstellen (TabbedPane) |
 | S-03 | Should-Have | 2 | ⬜ | Output-Verzeichnis und Projektname konfigurieren |
 | S-04 | Must-Have | 5 | ⬜ | One-Click-Analyse starten (SwingWorker) |
 | S-05 | Should-Have | 3 | ⬜ | Fortschrittsanzeige während Analyse (ProgressBar + Log) |
