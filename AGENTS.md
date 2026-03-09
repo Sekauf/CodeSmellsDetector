@@ -11,6 +11,8 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 
 ## Story-Tracker (nach jeder Story updaten!)
 
+### Phase 1: CLI & Evaluierungs-Pipeline
+
 | Story | Status | Beschreibung |
 |-------|--------|-------------|
 | US-01 | ✅ | LabelDTO + Labeling-CSV-Export |
@@ -26,7 +28,25 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 | US-11 | ✅ | Markdown-Report |
 | US-12 | ✅ | CLI-Erweiterung (--evaluate) |
 | US-13 | ⬜ | E2E Integration Test |
-| US-14 | ⬜ | README-Doku |
+
+### Phase 2: GUI-Redesign & One-Click-Analyse
+
+| Story | Priorität | SP | Status | Beschreibung |
+|-------|-----------|-----|--------|-------------|
+| S-01 | Must-Have | 3 | ✅ | Projektverzeichnis auswählen (FileChooser + D&D + Verlauf) |
+| S-02 | Must-Have | 5 | ⬜ | Tool-Konfiguration übersichtlich darstellen (TabbedPane) |
+| S-03 | Should-Have | 2 | ⬜ | Output-Verzeichnis und Projektname konfigurieren |
+| S-04 | Must-Have | 5 | ⬜ | One-Click-Analyse starten (SwingWorker) |
+| S-05 | Should-Have | 3 | ⬜ | Fortschrittsanzeige während Analyse (ProgressBar + Log) |
+| S-06 | Could-Have | 3 | ⬜ | SonarQube-Docker automatisch starten/stoppen |
+| S-07 | Should-Have | 2 | ⬜ | Analyse abbrechen (cancel + Cleanup) |
+| S-08 | Must-Have | 5 | ⬜ | Kandidaten-Tabelle anzeigen (JTable + Sorter + Farben) |
+| S-09 | Should-Have | 3 | ⬜ | Tabelle filtern und durchsuchen (CompositeRowFilter) |
+| S-10 | Should-Have | 5 | ⬜ | Tool-Agreement-Übersicht anzeigen (Jaccard + Venn) |
+| S-11 | Must-Have | 3 | ⬜ | Ergebnisse exportieren (CSV/JSON/Markdown per Dialog) |
+| S-12 | Must-Have | 8 | ⬜ | Inline-Labeling in der Tabelle (K1–K4, finalLabel) |
+| S-13 | Must-Have | 5 | ⬜ | Evaluation aus GUI starten (P/R/F1, FP/FN, Reliabilität) |
+
 
 ## Randbedingungen
 
