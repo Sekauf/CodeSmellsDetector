@@ -2,6 +2,8 @@ package org.example.gui;
 
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
+import java.awt.Color;
+import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -13,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -25,7 +28,10 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
+import javax.swing.table.TableCellRenderer;
+import javax.swing.table.TableRowSorter;
 import org.example.baseline.CandidateCsvUtil;
+import org.example.baseline.CandidateDTO;
 
 /**
  * Three-card GUI: SETUP → PROGRESS → RESULTS.
@@ -55,9 +61,11 @@ public class MainWindow extends JFrame {
     private AnalysisWorker        worker;
 
     // Results fields
-    private JLabel summaryLabel;
-    private JTable resultsTable;
-    private Path   currentOutputDir;
+    private JLabel              summaryLabel;
+    private JLabel              statusBar;
+    private JTable              resultsTable;
+    private CandidateTableModel candidateTableModel;
+    private Path                currentOutputDir;
 
     /** Constructs and wires the three-card window. */
     public MainWindow() {
@@ -148,18 +156,67 @@ public class MainWindow extends JFrame {
         summaryLabel = new JLabel("Analyse abgeschlossen.");
         p.add(summaryLabel, BorderLayout.NORTH);
 
-        resultsTable = new JTable(new ResultsTableModel(List.of()));
-        resultsTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        candidateTableModel = new CandidateTableModel();
+        resultsTable = buildCandidateTable();
         p.add(new JScrollPane(resultsTable), BorderLayout.CENTER);
 
+        statusBar = new JLabel(" ");
         JButton openBtn = new JButton("Ausgabeordner öffnen");
         openBtn.addActionListener(e -> openOutputFolder());
         JButton newBtn = new JButton("Neue Analyse");
         newBtn.addActionListener(e -> cardLayout.show(cards, CARD_SETUP));
-        JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        south.add(openBtn); south.add(newBtn);
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttons.add(openBtn); buttons.add(newBtn);
+        JPanel south = new JPanel(new BorderLayout(4, 0));
+        south.add(statusBar, BorderLayout.CENTER);
+        south.add(buttons, BorderLayout.EAST);
         p.add(south, BorderLayout.SOUTH);
         return p;
+    }
+
+    /** Builds a sortable, color-coded JTable for candidate results. */
+    private JTable buildCandidateTable() {
+        JTable table = new JTable(candidateTableModel) {
+            @Override
+            public Component prepareRenderer(TableCellRenderer renderer, int row, int col) {
+                Component c = super.prepareRenderer(renderer, row, col);
+                if (!isRowSelected(row)) {
+                    int modelRow = convertRowIndexToModel(row);
+                    Color bg = RowColorRenderer.backgroundFor(candidateTableModel.getRow(modelRow));
+                    if (bg != null) { c.setBackground(bg); }
+                }
+                return c;
+            }
+        };
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        BooleanCellRenderer boolRenderer = new BooleanCellRenderer();
+        table.getColumnModel().getColumn(CandidateTableModel.COL_BASELINE).setCellRenderer(boolRenderer);
+        table.getColumnModel().getColumn(CandidateTableModel.COL_SONAR).setCellRenderer(boolRenderer);
+        table.getColumnModel().getColumn(CandidateTableModel.COL_JDEO).setCellRenderer(boolRenderer);
+        installSorter(table);
+        setColumnWidths(table);
+        return table;
+    }
+
+    private void installSorter(JTable table) {
+        TableRowSorter<CandidateTableModel> sorter = new TableRowSorter<>(candidateTableModel);
+        Comparator<Integer> nullInt = Comparator.nullsFirst(Integer::compareTo);
+        Comparator<Double>  nullDbl = Comparator.nullsFirst(Double::compareTo);
+        for (int col : new int[]{
+                CandidateTableModel.COL_WMC, CandidateTableModel.COL_ATFD_CBO,
+                CandidateTableModel.COL_LOC, CandidateTableModel.COL_METHODS,
+                CandidateTableModel.COL_FIELDS, CandidateTableModel.COL_DEPTYPES}) {
+            sorter.setComparator(col, nullInt);
+        }
+        sorter.setComparator(CandidateTableModel.COL_TCC, nullDbl);
+        table.setRowSorter(sorter);
+    }
+
+    private void setColumnWidths(JTable table) {
+        int[] widths = {300, 65, 75, 85, 50, 55, 65, 50, 60, 55, 70};
+        for (int i = 0; i < widths.length && i < table.getColumnCount(); i++) {
+            table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -260,27 +317,76 @@ public class MainWindow extends JFrame {
         cancelBtn.setText("Abbrechen");
         progressBar.setValue(100);
 
-        List<String[]> rows = new ArrayList<>();
-        int sonarCount = 0, jdeoCount = 0;
+        List<CandidateDTO> candidates = parseCandidatesFromCsv(outputDir);
+        candidateTableModel.setData(candidates);
+        updateStatusBar(candidates);
+        summaryLabel.setText("Analyse abgeschlossen. " + candidates.size() + " Kandidaten gefunden.");
+        cardLayout.show(cards, CARD_RESULTS);
+    }
+
+    private List<CandidateDTO> parseCandidatesFromCsv(Path outputDir) {
+        List<CandidateDTO> result = new ArrayList<>();
         try {
             List<String> lines = Files.readAllLines(outputDir.resolve("results.csv"), StandardCharsets.UTF_8);
             for (int i = 1; i < lines.size(); i++) {
-                if (lines.get(i).isBlank()) continue;
-                List<String> fields = CandidateCsvUtil.parseCsvLine(lines.get(i));
-                String[] row = fields.toArray(new String[0]);
-                rows.add(row);
-                if (fields.size() > 2 && "true".equalsIgnoreCase(fields.get(2))) sonarCount++;
-                if (fields.size() > 3 && "true".equalsIgnoreCase(fields.get(3))) jdeoCount++;
+                if (lines.get(i).isBlank()) { continue; }
+                CandidateDTO dto = parseCsvRow(CandidateCsvUtil.parseCsvLine(lines.get(i)));
+                if (dto != null) { result.add(dto); }
             }
         } catch (Exception e) {
             appendLog("Warnung: results.csv konnte nicht gelesen werden: " + e.getMessage());
         }
+        return result;
+    }
 
-        summaryLabel.setText(String.format(
-                "Analyse abgeschlossen. %d Kandidaten gefunden  (Sonar: %d | JDeodorant: %d)",
-                rows.size(), sonarCount, jdeoCount));
-        resultsTable.setModel(new ResultsTableModel(rows));
-        cardLayout.show(cards, CARD_RESULTS);
+    private CandidateDTO parseCsvRow(List<String> f) {
+        if (f == null || f.size() < 12) { return null; }
+        // CSV columns: 0=fqcn, 1=baseline, 2=sonar, 3=jdeo, 4=wmc, 5=tcc, 6=atfd, 7=cbo,
+        //              8=loc, 9=godClass, 10=usedCboFallback, 11=methods, 12=fields, 13=deptypes, 14=reasons
+        return new CandidateDTO(
+                f.get(0),
+                "true".equalsIgnoreCase(f.get(1)),
+                "true".equalsIgnoreCase(f.get(2)),
+                "true".equalsIgnoreCase(f.get(3)),
+                parseNullableInt(f.get(4)),
+                parseNullableDouble(f.get(5)),
+                parseNullableInt(f.get(6)),
+                parseNullableInt(f.get(7)),
+                parseNullableInt(f.get(8)),
+                safeInt(f.size() > 11 ? f.get(11) : ""),
+                safeInt(f.size() > 12 ? f.get(12) : ""),
+                safeInt(f.size() > 13 ? f.get(13) : ""),
+                f.size() > 14 ? parseReasons(f.get(14)) : List.of()
+        );
+    }
+
+    private void updateStatusBar(List<CandidateDTO> candidates) {
+        long baseline = candidates.stream().filter(CandidateDTO::isBaselineFlag).count();
+        long sonar    = candidates.stream().filter(CandidateDTO::isSonarFlag).count();
+        long jdeo     = candidates.stream().filter(CandidateDTO::isJdeodorantFlag).count();
+        statusBar.setText(String.format(
+                "%d Kandidaten  |  %d Baseline  |  %d SonarQube  |  %d JDeodorant",
+                candidates.size(), baseline, sonar, jdeo));
+    }
+
+    private static Integer parseNullableInt(String s) {
+        if (s == null || s.isBlank()) { return null; }
+        try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return null; }
+    }
+
+    private static Double parseNullableDouble(String s) {
+        if (s == null || s.isBlank()) { return null; }
+        try { return Double.parseDouble(s.trim()); } catch (NumberFormatException e) { return null; }
+    }
+
+    private static int safeInt(String s) {
+        Integer v = parseNullableInt(s);
+        return v == null ? 0 : v;
+    }
+
+    private static List<String> parseReasons(String s) {
+        if (s == null || s.isBlank()) { return List.of(); }
+        return List.of(s.split(";"));
     }
 
     /** Called on EDT by {@link AnalysisWorker#done()} when the user cancelled. */
