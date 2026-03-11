@@ -50,6 +50,7 @@ public class MainWindow extends JFrame {
     private JLabel                stepLabel;
     private JTextArea             logArea;
     private JProgressBar          progressBar;
+    private JButton               cancelBtn;
     private DockerStatusIndicator dockerIndicator;
     private AnalysisWorker        worker;
 
@@ -131,8 +132,9 @@ public class MainWindow extends JFrame {
 
         progressBar = new JProgressBar(0, 100);
         progressBar.setStringPainted(true);
-        JButton cancelBtn = new JButton("Abbrechen");
-        cancelBtn.addActionListener(e -> { if (worker != null) worker.cancel(true); });
+        cancelBtn = new JButton("Abbrechen");
+        cancelBtn.setEnabled(false);
+        cancelBtn.addActionListener(e -> onCancelOrBack());
         JPanel south = new JPanel(new BorderLayout(4, 0));
         south.add(progressBar, BorderLayout.CENTER);
         south.add(cancelBtn,   BorderLayout.EAST);
@@ -210,11 +212,30 @@ public class MainWindow extends JFrame {
                         : DockerStatusIndicator.State.IDLE);
         runBtn.setText("L\u00e4uft\u2026");
         runBtn.setEnabled(false);
+        cancelBtn.setText("Abbrechen");
+        cancelBtn.setEnabled(true);
         cardLayout.show(cards, CARD_PROGRESS);
         worker = new AnalysisWorker(
                 this, projectRootPath, thresholds, sonarConfig, jdConfig,
                 currentOutputDir, dockerIndicator, autoStop);
         worker.execute();
+    }
+
+    /**
+     * Handles the Cancel/Back button depending on current state.
+     * During analysis the button cancels the worker; after cancellation it
+     * acts as a "Back to configuration" navigation button.
+     */
+    private void onCancelOrBack() {
+        if (worker != null && !worker.isDone()) {
+            cancelBtn.setText("Wird abgebrochen\u2026");
+            cancelBtn.setEnabled(false);
+            worker.cancel(true);
+        } else {
+            cancelBtn.setEnabled(false);
+            cancelBtn.setText("Abbrechen");
+            cardLayout.show(cards, CARD_SETUP);
+        }
     }
 
     /** Thread-safe: appends a line to the log area and auto-scrolls. */
@@ -235,6 +256,8 @@ public class MainWindow extends JFrame {
     public void onAnalysisComplete(Path outputDir) {
         runBtn.setText("Analyse starten");
         updateRunButtonState();
+        cancelBtn.setEnabled(false);
+        cancelBtn.setText("Abbrechen");
         progressBar.setValue(100);
 
         List<String[]> rows = new ArrayList<>();
@@ -260,10 +283,23 @@ public class MainWindow extends JFrame {
         cardLayout.show(cards, CARD_RESULTS);
     }
 
+    /** Called on EDT by {@link AnalysisWorker#done()} when the user cancelled. */
+    public void onAnalysisCancelled() {
+        runBtn.setText("Analyse starten");
+        updateRunButtonState();
+        stepLabel.setText("Analyse abgebrochen.");
+        progressBar.setString("Abgebrochen");
+        appendLog("--- Analyse wurde abgebrochen ---");
+        cancelBtn.setText("Zur\u00fcck zur Konfiguration");
+        cancelBtn.setEnabled(true);
+    }
+
     /** Called on EDT by {@link AnalysisWorker#done()} on failure. */
     public void onAnalysisFailed(Throwable error) {
         runBtn.setText("Analyse starten");
         updateRunButtonState();
+        cancelBtn.setEnabled(false);
+        cancelBtn.setText("Abbrechen");
         JOptionPane.showMessageDialog(this,
                 "Analyse fehlgeschlagen:\n" + error.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
         cardLayout.show(cards, CARD_SETUP);

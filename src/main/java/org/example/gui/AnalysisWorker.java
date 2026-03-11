@@ -1,8 +1,11 @@
 package org.example.gui;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -26,6 +29,11 @@ import org.example.sonar.SonarDockerManager;
  * checks Docker availability, starts the container, then stops it afterwards
  * if {@code autoStop} is set. The {@link DockerStatusIndicator} is updated
  * throughout so the user can follow the container lifecycle.</p>
+ *
+ * <p>Cancellation: calling {@code cancel(true)} interrupts the background thread.
+ * Blocking calls that respect thread interruption ({@code Process.waitFor},
+ * {@code Thread.sleep}) surface as {@link InterruptedException} and abort the
+ * pipeline. Partial output files are deleted on cancellation.</p>
  */
 public class AnalysisWorker extends SwingWorker<Void, String> {
 
@@ -77,14 +85,17 @@ public class AnalysisWorker extends SwingWorker<Void, String> {
         guiHandler.setLevel(Level.INFO);
         root.addHandler(guiHandler);
 
-        ProgressCallback callback = (label, percent) ->
+        ProgressCallback callback = (label, percent) -> {
+            if (!isCancelled()) {
                 SwingUtilities.invokeLater(() -> owner.updateProgress(label, percent));
+            }
+        };
         try {
             new AnalysisOrchestrator().run(
                     projectRoot, thresholds, sonarConfig, jdeodorantConfig, outputDir, callback);
         } finally {
             root.removeHandler(guiHandler);
-            if (sonarConfig != null && sonarConfig.isDockerEnabled() && autoStop) {
+            if (!isCancelled() && sonarConfig != null && sonarConfig.isDockerEnabled() && autoStop) {
                 stopDockerContainer();
             }
         }
@@ -103,9 +114,38 @@ public class AnalysisWorker extends SwingWorker<Void, String> {
         try {
             get();
             owner.onAnalysisComplete(outputDir);
-        } catch (Exception e) {
+        } catch (CancellationException e) {
+            cleanupOutputDir();
+            owner.onAnalysisCancelled();
+        } catch (ExecutionException e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
-            owner.onAnalysisFailed(cause);
+            if (isCancelled() || cause instanceof InterruptedException) {
+                cleanupOutputDir();
+                owner.onAnalysisCancelled();
+            } else {
+                owner.onAnalysisFailed(cause);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            cleanupOutputDir();
+            owner.onAnalysisCancelled();
+        }
+    }
+
+    /**
+     * Deletes partial output files written during an aborted analysis.
+     * Best-effort: errors are silently ignored.
+     */
+    private void cleanupOutputDir() {
+        if (outputDir == null || !Files.exists(outputDir)) {
+            return;
+        }
+        for (String name : List.of("results.csv", "results.json", "labeling_input.csv")) {
+            try {
+                Files.deleteIfExists(outputDir.resolve(name));
+            } catch (IOException ex) {
+                // best-effort — do not propagate
+            }
         }
     }
 

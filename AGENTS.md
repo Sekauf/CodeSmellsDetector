@@ -39,7 +39,7 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 | S-04 | Must-Have | 5 | ✅ | One-Click-Analyse starten (SwingWorker) |
 | S-05 | Should-Have | 3 | ✅ | Fortschrittsanzeige während Analyse (ProgressBar + Log) |
 | S-06 | Could-Have | 3 | ✅ | SonarQube-Docker automatisch starten/stoppen |
-| S-07 | Should-Have | 2 | ⬜ | Analyse abbrechen (cancel + Cleanup) |
+| S-07 | Should-Have | 2 | ✅ | Analyse abbrechen (cancel + Cleanup) |
 | S-08 | Must-Have | 5 | ⬜ | Kandidaten-Tabelle anzeigen (JTable + Sorter + Farben) |
 | S-09 | Should-Have | 3 | ⬜ | Tabelle filtern und durchsuchen (CompositeRowFilter) |
 | S-10 | Should-Have | 5 | ⬜ | Tool-Agreement-Übersicht anzeigen (Jaccard + Venn) |
