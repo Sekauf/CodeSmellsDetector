@@ -69,6 +69,8 @@ public class MainWindow extends JFrame {
     private TableRowSorter<CandidateTableModel> rowSorter;
     private FilterPanel                         filterPanel;
     private AgreementPanel                      agreementPanel;
+    private JButton                             exportBtn;
+    private List<CandidateDTO>                  currentCandidates = List.of();
     private Path                                currentOutputDir;
 
     // Stored totals for status bar (set when new data arrives)
@@ -182,10 +184,13 @@ public class MainWindow extends JFrame {
         statusBar = new JLabel(" ");
         JButton openBtn = new JButton("Ausgabeordner öffnen");
         openBtn.addActionListener(e -> openOutputFolder());
+        exportBtn = new JButton("Exportieren\u2026");
+        exportBtn.setEnabled(false);
+        exportBtn.addActionListener(e -> new ExportDialog(this, currentCandidates, currentOutputDir).setVisible(true));
         JButton newBtn = new JButton("Neue Analyse");
         newBtn.addActionListener(e -> cardLayout.show(cards, CARD_SETUP));
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        buttons.add(openBtn); buttons.add(newBtn);
+        buttons.add(openBtn); buttons.add(exportBtn); buttons.add(newBtn);
         JPanel south = new JPanel(new BorderLayout(4, 0));
         south.add(statusBar, BorderLayout.CENTER);
         south.add(buttons, BorderLayout.EAST);
@@ -337,12 +342,14 @@ public class MainWindow extends JFrame {
         progressBar.setValue(100);
 
         List<CandidateDTO> candidates = parseCandidatesFromCsv(outputDir);
+        currentCandidates = candidates;
         totalCandidates = candidates.size();
         baselineTotal   = candidates.stream().filter(CandidateDTO::isBaselineFlag).count();
         sonarTotal      = candidates.stream().filter(CandidateDTO::isSonarFlag).count();
         jdeoTotal       = candidates.stream().filter(CandidateDTO::isJdeodorantFlag).count();
         candidateTableModel.setData(candidates);
         agreementPanel.update(candidates);
+        exportBtn.setEnabled(true);
         applyFilter();
         summaryLabel.setText("Analyse abgeschlossen. " + candidates.size() + " Kandidaten gefunden.");
         cardLayout.show(cards, CARD_RESULTS);
