@@ -61,11 +61,19 @@ public class MainWindow extends JFrame {
     private AnalysisWorker        worker;
 
     // Results fields
-    private JLabel              summaryLabel;
-    private JLabel              statusBar;
-    private JTable              resultsTable;
-    private CandidateTableModel candidateTableModel;
-    private Path                currentOutputDir;
+    private JLabel                              summaryLabel;
+    private JLabel                              statusBar;
+    private JTable                              resultsTable;
+    private CandidateTableModel                 candidateTableModel;
+    private TableRowSorter<CandidateTableModel> rowSorter;
+    private FilterPanel                         filterPanel;
+    private Path                                currentOutputDir;
+
+    // Stored totals for status bar (set when new data arrives)
+    private int  totalCandidates;
+    private long baselineTotal;
+    private long sonarTotal;
+    private long jdeoTotal;
 
     /** Constructs and wires the three-card window. */
     public MainWindow() {
@@ -158,7 +166,11 @@ public class MainWindow extends JFrame {
 
         candidateTableModel = new CandidateTableModel();
         resultsTable = buildCandidateTable();
-        p.add(new JScrollPane(resultsTable), BorderLayout.CENTER);
+        filterPanel = new FilterPanel(this::applyFilter);
+        JPanel center = new JPanel(new BorderLayout(0, 4));
+        center.add(filterPanel, BorderLayout.NORTH);
+        center.add(new JScrollPane(resultsTable), BorderLayout.CENTER);
+        p.add(center, BorderLayout.CENTER);
 
         statusBar = new JLabel(" ");
         JButton openBtn = new JButton("Ausgabeordner öffnen");
@@ -199,17 +211,17 @@ public class MainWindow extends JFrame {
     }
 
     private void installSorter(JTable table) {
-        TableRowSorter<CandidateTableModel> sorter = new TableRowSorter<>(candidateTableModel);
+        rowSorter = new TableRowSorter<>(candidateTableModel);
         Comparator<Integer> nullInt = Comparator.nullsFirst(Integer::compareTo);
         Comparator<Double>  nullDbl = Comparator.nullsFirst(Double::compareTo);
         for (int col : new int[]{
                 CandidateTableModel.COL_WMC, CandidateTableModel.COL_ATFD_CBO,
                 CandidateTableModel.COL_LOC, CandidateTableModel.COL_METHODS,
                 CandidateTableModel.COL_FIELDS, CandidateTableModel.COL_DEPTYPES}) {
-            sorter.setComparator(col, nullInt);
+            rowSorter.setComparator(col, nullInt);
         }
-        sorter.setComparator(CandidateTableModel.COL_TCC, nullDbl);
-        table.setRowSorter(sorter);
+        rowSorter.setComparator(CandidateTableModel.COL_TCC, nullDbl);
+        table.setRowSorter(rowSorter);
     }
 
     private void setColumnWidths(JTable table) {
@@ -318,8 +330,12 @@ public class MainWindow extends JFrame {
         progressBar.setValue(100);
 
         List<CandidateDTO> candidates = parseCandidatesFromCsv(outputDir);
+        totalCandidates = candidates.size();
+        baselineTotal   = candidates.stream().filter(CandidateDTO::isBaselineFlag).count();
+        sonarTotal      = candidates.stream().filter(CandidateDTO::isSonarFlag).count();
+        jdeoTotal       = candidates.stream().filter(CandidateDTO::isJdeodorantFlag).count();
         candidateTableModel.setData(candidates);
-        updateStatusBar(candidates);
+        applyFilter();
         summaryLabel.setText("Analyse abgeschlossen. " + candidates.size() + " Kandidaten gefunden.");
         cardLayout.show(cards, CARD_RESULTS);
     }
@@ -360,13 +376,17 @@ public class MainWindow extends JFrame {
         );
     }
 
-    private void updateStatusBar(List<CandidateDTO> candidates) {
-        long baseline = candidates.stream().filter(CandidateDTO::isBaselineFlag).count();
-        long sonar    = candidates.stream().filter(CandidateDTO::isSonarFlag).count();
-        long jdeo     = candidates.stream().filter(CandidateDTO::isJdeodorantFlag).count();
+    private void applyFilter() {
+        if (rowSorter == null || filterPanel == null) { return; }
+        rowSorter.setRowFilter(filterPanel.buildFilter());
+        refreshStatusBar();
+    }
+
+    private void refreshStatusBar() {
+        int visible = resultsTable.getRowCount();
         statusBar.setText(String.format(
-                "%d Kandidaten  |  %d Baseline  |  %d SonarQube  |  %d JDeodorant",
-                candidates.size(), baseline, sonar, jdeo));
+                "%d von %d sichtbar  |  %d Baseline  |  %d SonarQube  |  %d JDeodorant (gesamt)",
+                visible, totalCandidates, baselineTotal, sonarTotal, jdeoTotal));
     }
 
     private static Integer parseNullableInt(String s) {
