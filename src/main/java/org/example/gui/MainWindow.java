@@ -47,10 +47,11 @@ public class MainWindow extends JFrame {
     private JButton          runBtn;
 
     // Progress fields
-    private JLabel       stepLabel;
-    private JTextArea    logArea;
-    private JProgressBar progressBar;
-    private AnalysisWorker worker;
+    private JLabel                stepLabel;
+    private JTextArea             logArea;
+    private JProgressBar          progressBar;
+    private DockerStatusIndicator dockerIndicator;
+    private AnalysisWorker        worker;
 
     // Results fields
     private JLabel summaryLabel;
@@ -115,8 +116,13 @@ public class MainWindow extends JFrame {
     private JPanel buildProgressCard() {
         JPanel p = new JPanel(new BorderLayout(4, 4));
         p.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        stepLabel = new JLabel("Analyse l\u00e4uft\u2026");
-        p.add(stepLabel, BorderLayout.NORTH);
+
+        stepLabel       = new JLabel("Analyse l\u00e4uft\u2026");
+        dockerIndicator = new DockerStatusIndicator();
+        JPanel northRow = new JPanel(new java.awt.BorderLayout(8, 0));
+        northRow.add(stepLabel,       java.awt.BorderLayout.CENTER);
+        northRow.add(dockerIndicator, java.awt.BorderLayout.EAST);
+        p.add(northRow, BorderLayout.NORTH);
 
         logArea = new JTextArea();
         logArea.setEditable(false);
@@ -193,13 +199,21 @@ public class MainWindow extends JFrame {
         var sonarConfig = toolConfigPanel.getSonarConfig(projectName);
         var jdConfig    = toolConfigPanel.getJDeodorantConfig();
 
+        boolean autoStop = toolConfigPanel.isSonarAutoStopEnabled();
+
         logArea.setText("");
         stepLabel.setText("Analyse wird vorbereitet\u2026");
         progressBar.setValue(0);
+        dockerIndicator.setState(
+                sonarConfig != null && sonarConfig.isDockerEnabled()
+                        ? DockerStatusIndicator.State.IDLE
+                        : DockerStatusIndicator.State.IDLE);
         runBtn.setText("L\u00e4uft\u2026");
         runBtn.setEnabled(false);
         cardLayout.show(cards, CARD_PROGRESS);
-        worker = new AnalysisWorker(this, projectRootPath, thresholds, sonarConfig, jdConfig, currentOutputDir);
+        worker = new AnalysisWorker(
+                this, projectRootPath, thresholds, sonarConfig, jdConfig,
+                currentOutputDir, dockerIndicator, autoStop);
         worker.execute();
     }
 

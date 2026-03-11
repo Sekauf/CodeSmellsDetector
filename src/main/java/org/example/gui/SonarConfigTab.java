@@ -25,19 +25,22 @@ public class SonarConfigTab extends JPanel {
     private final JTextField     hostField;
     private final JPasswordField tokenField;
     private final JCheckBox      dockerCheckBox;
+    private final JCheckBox      autoStopCheckBox;
 
     /** Constructs the tab with pre-filled defaults. */
     public SonarConfigTab() {
         super(new GridBagLayout());
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
-        enableCheckBox = new JCheckBox("SonarQube aktivieren", false);
-        hostField      = new JTextField(DEFAULT_HOST);
-        tokenField     = new JPasswordField();
-        dockerCheckBox = new JCheckBox("SonarQube via Docker starten");
+        enableCheckBox   = new JCheckBox("SonarQube aktivieren", false);
+        hostField        = new JTextField(DEFAULT_HOST);
+        tokenField       = new JPasswordField();
+        dockerCheckBox   = new JCheckBox("SonarQube via Docker starten");
+        autoStopCheckBox = new JCheckBox("Container nach Analyse automatisch stoppen", true);
 
         buildLayout();
         enableCheckBox.addItemListener(e -> updateFieldState());
+        dockerCheckBox.addItemListener(e -> updateDockerSection());
         updateFieldState();
     }
 
@@ -48,6 +51,18 @@ public class SonarConfigTab extends JPanel {
      */
     public boolean isEnabled() {
         return enableCheckBox.isSelected();
+    }
+
+    /**
+     * Returns whether Docker auto-stop is active.
+     * Only {@code true} when both Docker mode and the auto-stop checkbox are selected.
+     *
+     * @return {@code true} if the container should be stopped after the scan
+     */
+    public boolean isAutoStopEnabled() {
+        return enableCheckBox.isSelected()
+                && dockerCheckBox.isSelected()
+                && autoStopCheckBox.isSelected();
     }
 
     /**
@@ -103,6 +118,11 @@ public class SonarConfigTab extends JPanel {
         add(dockerCheckBox, g);
         g.gridwidth = 1;
 
+        // Auto-stop toggle (only relevant when Docker mode is on)
+        g.gridx = 0; g.gridy = r++; g.gridwidth = 2;
+        add(autoStopCheckBox, g);
+        g.gridwidth = 1;
+
         // Fixed rule (read-only)
         addRow("Regel (fest):", buildRuleLabel(), r, g);
     }
@@ -125,5 +145,11 @@ public class SonarConfigTab extends JPanel {
         hostField.setEnabled(on);
         tokenField.setEnabled(on);
         dockerCheckBox.setEnabled(on);
+        updateDockerSection();
+    }
+
+    private void updateDockerSection() {
+        boolean dockerOn = enableCheckBox.isSelected() && dockerCheckBox.isSelected();
+        autoStopCheckBox.setEnabled(dockerOn);
     }
 }
