@@ -1,7 +1,9 @@
 package org.example.gui;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -14,56 +16,77 @@ import org.example.logging.LoggingConfigurator;
 import org.example.orchestrator.AnalysisOrchestrator;
 import org.example.orchestrator.ProgressCallback;
 import org.example.sonar.SonarConfig;
+import org.example.sonar.SonarDockerManager;
 
 /**
  * Runs {@link AnalysisOrchestrator#run} on a background thread and streams
  * log output live to the progress card via {@link MainWindow#appendLog}.
  *
- * <p>The GUI handler is added <em>after</em> {@link LoggingConfigurator#configure}
- * because configure() removes all pre-existing handlers first.</p>
+ * <p>When {@code sonarConfig.isDockerEnabled()} is {@code true} the worker
+ * checks Docker availability, starts the container, then stops it afterwards
+ * if {@code autoStop} is set. The {@link DockerStatusIndicator} is updated
+ * throughout so the user can follow the container lifecycle.</p>
  */
 public class AnalysisWorker extends SwingWorker<Void, String> {
 
-    private final MainWindow owner;
-    private final Path projectRoot;
-    private final BaselineThresholds thresholds;
-    private final SonarConfig sonarConfig;
-    private final ProjectConfig jdeodorantConfig;
-    private final Path outputDir;
+    private static final int DOCKER_INFO_TIMEOUT_SEC = 10;
+    private static final int DOCKER_STOP_TIMEOUT_SEC = 30;
 
+    private final MainWindow             owner;
+    private final Path                   projectRoot;
+    private final BaselineThresholds     thresholds;
+    private final SonarConfig            sonarConfig;
+    private final ProjectConfig          jdeodorantConfig;
+    private final Path                   outputDir;
+    private final DockerStatusIndicator  dockerIndicator;
+    private final boolean                autoStop;
+
+    /** Full constructor including Docker status indicator and auto-stop flag. */
     public AnalysisWorker(
             MainWindow owner,
             Path projectRoot,
             BaselineThresholds thresholds,
             SonarConfig sonarConfig,
             ProjectConfig jdeodorantConfig,
-            Path outputDir) {
-        this.owner = owner;
-        this.projectRoot = projectRoot;
-        this.thresholds = thresholds;
-        this.sonarConfig = sonarConfig;
+            Path outputDir,
+            DockerStatusIndicator dockerIndicator,
+            boolean autoStop) {
+        this.owner            = owner;
+        this.projectRoot      = projectRoot;
+        this.thresholds       = thresholds;
+        this.sonarConfig      = sonarConfig;
         this.jdeodorantConfig = jdeodorantConfig;
-        this.outputDir = outputDir;
+        this.outputDir        = outputDir;
+        this.dockerIndicator  = dockerIndicator;
+        this.autoStop         = autoStop;
     }
 
     @Override
     protected Void doInBackground() throws Exception {
-        // Configure file + console logging first (removes all existing handlers)
-        LoggingConfigurator.configure(outputDir, true);
+        if (sonarConfig != null && sonarConfig.isDockerEnabled()) {
+            startDockerContainer();
+        }
 
-        // Add GUI handler after configure() so it is not removed
+        if (isCancelled()) {
+            return null;
+        }
+
+        LoggingConfigurator.configure(outputDir, true);
         Logger root = Logger.getLogger("");
         Handler guiHandler = new GuiLogHandler();
         guiHandler.setLevel(Level.INFO);
         root.addHandler(guiHandler);
 
-        ProgressCallback progressCallback = (label, percent) ->
+        ProgressCallback callback = (label, percent) ->
                 SwingUtilities.invokeLater(() -> owner.updateProgress(label, percent));
         try {
             new AnalysisOrchestrator().run(
-                    projectRoot, thresholds, sonarConfig, jdeodorantConfig, outputDir, progressCallback);
+                    projectRoot, thresholds, sonarConfig, jdeodorantConfig, outputDir, callback);
         } finally {
             root.removeHandler(guiHandler);
+            if (sonarConfig != null && sonarConfig.isDockerEnabled() && autoStop) {
+                stopDockerContainer();
+            }
         }
         return null;
     }
@@ -86,6 +109,94 @@ public class AnalysisWorker extends SwingWorker<Void, String> {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Docker lifecycle helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Checks Docker availability, then starts the SonarQube container.
+     *
+     * @throws IOException          if Docker is not installed or the container does not become healthy
+     * @throws InterruptedException if the thread is interrupted while waiting
+     */
+    private void startDockerContainer() throws IOException, InterruptedException {
+        setDockerState(DockerStatusIndicator.State.CHECKING);
+        checkDockerPresence();
+
+        if (isCancelled()) {
+            return;
+        }
+
+        setDockerState(DockerStatusIndicator.State.STARTING);
+        boolean ready = new SonarDockerManager().ensureRunning(sonarConfig);
+        if (!ready) {
+            setDockerState(DockerStatusIndicator.State.ERROR);
+            throw new IOException(
+                    "SonarQube wurde innerhalb von 120 s nicht bereit.\n"
+                    + "Abbruch — bitte Docker Desktop prüfen.");
+        }
+        setDockerState(DockerStatusIndicator.State.READY);
+    }
+
+    /**
+     * Executes {@code docker info} to verify Docker is installed and running.
+     *
+     * @throws IOException          if Docker is absent or not reachable
+     * @throws InterruptedException if interrupted while waiting for the process
+     */
+    private void checkDockerPresence() throws IOException, InterruptedException {
+        ProcessBuilder pb = new ProcessBuilder("docker", "info");
+        pb.redirectErrorStream(true);
+        try {
+            Process p = pb.start();
+            boolean finished = p.waitFor(DOCKER_INFO_TIMEOUT_SEC, TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                throw new IOException("docker info timed out.");
+            }
+            if (p.exitValue() != 0) {
+                throw new IOException("Docker antwortet nicht (Exit " + p.exitValue() + ").");
+            }
+        } catch (IOException e) {
+            setDockerState(DockerStatusIndicator.State.ERROR);
+            throw new IOException(
+                    "Docker ist nicht installiert oder nicht erreichbar.\n"
+                    + "Bitte Docker Desktop starten und erneut versuchen.", e);
+        }
+    }
+
+    /**
+     * Stops the SonarQube Docker container via {@code docker-compose stop}.
+     * Errors are logged as warnings and do not abort the result display.
+     */
+    private void stopDockerContainer() {
+        setDockerState(DockerStatusIndicator.State.STOPPING);
+        try {
+            ProcessBuilder pb = new ProcessBuilder("docker-compose", "stop", "sonarqube");
+            pb.redirectErrorStream(true);
+            String composeDir = System.getenv("SONAR_COMPOSE_DIR");
+            if (composeDir != null && !composeDir.isBlank()) {
+                pb.directory(Path.of(composeDir).toFile());
+            }
+            Process p = pb.start();
+            p.waitFor(DOCKER_STOP_TIMEOUT_SEC, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            publish("WARNUNG: Docker-Stop fehlgeschlagen: " + e.getMessage());
+        }
+        setDockerState(DockerStatusIndicator.State.STOPPED);
+    }
+
+    /** Null-safe helper to update the indicator from any thread. */
+    private void setDockerState(DockerStatusIndicator.State state) {
+        if (dockerIndicator != null) {
+            dockerIndicator.setState(state);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Log handler
+    // -------------------------------------------------------------------------
+
     /** Forwards log records to {@link SwingWorker#publish} for live display. */
     private class GuiLogHandler extends Handler {
         @Override
@@ -98,11 +209,9 @@ public class AnalysisWorker extends SwingWorker<Void, String> {
         }
 
         @Override
-        public void flush() {
-        }
+        public void flush() { }
 
         @Override
-        public void close() {
-        }
+        public void close() { }
     }
 }

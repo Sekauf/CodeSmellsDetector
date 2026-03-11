@@ -91,6 +91,15 @@ public class ToolConfigPanel extends JTabbedPane {
     }
 
     /**
+     * Returns whether SonarQube Docker auto-stop is configured.
+     *
+     * @return {@code true} if Docker mode is on and the auto-stop checkbox is checked
+     */
+    public boolean isSonarAutoStopEnabled() {
+        return sonarTab.isAutoStopEnabled();
+    }
+
+    /**
      * Returns {@code true} if at least one tool tab is enabled.
      * Used to decide whether the Run button should be active.
      *
