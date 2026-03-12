@@ -11,14 +11,19 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import javax.swing.BorderFactory;
+import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -29,10 +34,12 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableRowSorter;
 import org.example.baseline.CandidateCsvUtil;
 import org.example.baseline.CandidateDTO;
+import org.example.labeling.LabelDTO;
 
 /**
  * Three-card GUI: SETUP → PROGRESS → RESULTS.
@@ -72,6 +79,7 @@ public class MainWindow extends JFrame {
     private JButton                             exportBtn;
     private List<CandidateDTO>                  currentCandidates = List.of();
     private Path                                currentOutputDir;
+    private final LabelPersistenceService       labelPersistenceService = new LabelPersistenceService();
 
     // Stored totals for status bar (set when new data arrives)
     private int  totalCandidates;
@@ -82,7 +90,10 @@ public class MainWindow extends JFrame {
     /** Constructs and wires the three-card window. */
     public MainWindow() {
         super("CodeSmellsDetector");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosing(java.awt.event.WindowEvent e) { onWindowClosing(); }
+        });
         setSize(960, 720);
         setLocationRelativeTo(null);
         cards.add(buildSetupCard(),    CARD_SETUP);
@@ -174,6 +185,7 @@ public class MainWindow extends JFrame {
         JPanel candidatesTab = new JPanel(new BorderLayout(0, 4));
         candidatesTab.add(filterPanel, BorderLayout.NORTH);
         candidatesTab.add(new JScrollPane(resultsTable), BorderLayout.CENTER);
+        candidatesTab.add(buildLabelingToolbar(), BorderLayout.SOUTH);
 
         agreementPanel = new AgreementPanel();
         JTabbedPane resultsTabs = new JTabbedPane();
@@ -217,6 +229,7 @@ public class MainWindow extends JFrame {
         table.getColumnModel().getColumn(CandidateTableModel.COL_BASELINE).setCellRenderer(boolRenderer);
         table.getColumnModel().getColumn(CandidateTableModel.COL_SONAR).setCellRenderer(boolRenderer);
         table.getColumnModel().getColumn(CandidateTableModel.COL_JDEO).setCellRenderer(boolRenderer);
+        installFinalLabelEditor(table);
         installSorter(table);
         setColumnWidths(table);
         return table;
@@ -236,8 +249,15 @@ public class MainWindow extends JFrame {
         table.setRowSorter(rowSorter);
     }
 
+    private void installFinalLabelEditor(JTable table) {
+        JComboBox<String> combo = new JComboBox<>(
+                new String[]{"", "GOD_CLASS", "UNCERTAIN", "NO"});
+        table.getColumnModel().getColumn(CandidateTableModel.COL_FINAL_LABEL)
+                .setCellEditor(new DefaultCellEditor(combo));
+    }
+
     private void setColumnWidths(JTable table) {
-        int[] widths = {300, 65, 75, 85, 50, 55, 65, 50, 60, 55, 70};
+        int[] widths = {300, 65, 75, 85, 50, 55, 65, 50, 60, 55, 70, 35, 35, 35, 35, 150, 90};
         for (int i = 0; i < widths.length && i < table.getColumnCount(); i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
@@ -460,6 +480,77 @@ public class MainWindow extends JFrame {
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Ordner kann nicht geöffnet werden: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Labeling actions
+    // -------------------------------------------------------------------------
+
+    private JPanel buildLabelingToolbar() {
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JButton autoLabelBtn = new JButton("Auto-Label");
+        autoLabelBtn.setToolTipText("Setzt finalLabel aus ≥3/4 Kriterien");
+        autoLabelBtn.addActionListener(e -> onAutoLabel());
+        JButton saveBtn = new JButton("Speichern");
+        saveBtn.setToolTipText("Labels als labeling_input.csv exportieren");
+        saveBtn.addActionListener(e -> onSaveLabels());
+        JButton loadBtn = new JButton("Laden");
+        loadBtn.setToolTipText("Bereits gelabelte CSV importieren");
+        loadBtn.addActionListener(e -> onLoadLabels());
+        bar.add(autoLabelBtn);
+        bar.add(saveBtn);
+        bar.add(loadBtn);
+        return bar;
+    }
+
+    private void onAutoLabel() {
+        candidateTableModel.applyAutoLabels();
+    }
+
+    private void onSaveLabels() {
+        Path defaultPath = currentOutputDir != null
+                ? currentOutputDir.resolve("labeling_input.csv")
+                : Path.of("labeling_input.csv");
+        JFileChooser chooser = new JFileChooser(defaultPath.getParent().toFile());
+        chooser.setSelectedFile(defaultPath.toFile());
+        chooser.setFileFilter(new FileNameExtensionFilter("CSV-Dateien", "csv"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) { return; }
+        try {
+            labelPersistenceService.save(candidateTableModel.getAllLabels(),
+                    chooser.getSelectedFile().toPath());
+            candidateTableModel.clearDirty();
+            JOptionPane.showMessageDialog(this, "Labels gespeichert.", "Gespeichert",
+                    JOptionPane.INFORMATION_MESSAGE);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Fehler beim Speichern:\n" + ex.getMessage(),
+                    "Fehler", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onLoadLabels() {
+        JFileChooser chooser = new JFileChooser(
+                currentOutputDir != null ? currentOutputDir.toFile() : new File("."));
+        chooser.setFileFilter(new FileNameExtensionFilter("CSV-Dateien", "csv"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) { return; }
+        try {
+            Map<String, LabelDTO> labels =
+                    labelPersistenceService.load(chooser.getSelectedFile().toPath());
+            candidateTableModel.loadLabels(labels);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Fehler beim Laden:\n" + ex.getMessage(),
+                    "Fehler", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onWindowClosing() {
+        if (candidateTableModel.isDirty()) {
+            int choice = JOptionPane.showConfirmDialog(this,
+                    "Es gibt ungespeicherte Label-Änderungen. Trotzdem beenden?",
+                    "Ungespeicherte Änderungen",
+                    JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (choice != JOptionPane.YES_OPTION) { return; }
+        }
+        System.exit(0);
     }
 
     // -------------------------------------------------------------------------
