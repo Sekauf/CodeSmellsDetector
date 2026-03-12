@@ -76,7 +76,12 @@ public class MainWindow extends JFrame {
     private TableRowSorter<CandidateTableModel> rowSorter;
     private FilterPanel                         filterPanel;
     private AgreementPanel                      agreementPanel;
+    private AccuracyPanel                       accuracyPanel;
+    private FpFnPanel                           fpFnPanel;
+    private ReliabilityPanel                    reliabilityPanel;
     private JButton                             exportBtn;
+    private JButton                             evaluateBtn;
+    private Path                                secondReviewFile;
     private List<CandidateDTO>                  currentCandidates = List.of();
     private Path                                currentOutputDir;
     private final LabelPersistenceService       labelPersistenceService = new LabelPersistenceService();
@@ -180,6 +185,7 @@ public class MainWindow extends JFrame {
         p.add(summaryLabel, BorderLayout.NORTH);
 
         candidateTableModel = new CandidateTableModel();
+        candidateTableModel.addTableModelListener(e -> updateEvaluateButtonState());
         resultsTable = buildCandidateTable();
         filterPanel = new FilterPanel(this::applyFilter);
         JPanel candidatesTab = new JPanel(new BorderLayout(0, 4));
@@ -187,10 +193,16 @@ public class MainWindow extends JFrame {
         candidatesTab.add(new JScrollPane(resultsTable), BorderLayout.CENTER);
         candidatesTab.add(buildLabelingToolbar(), BorderLayout.SOUTH);
 
-        agreementPanel = new AgreementPanel();
+        agreementPanel  = new AgreementPanel();
+        accuracyPanel   = new AccuracyPanel();
+        fpFnPanel       = new FpFnPanel();
+        reliabilityPanel = new ReliabilityPanel();
         JTabbedPane resultsTabs = new JTabbedPane();
-        resultsTabs.addTab("Kandidaten", candidatesTab);
-        resultsTabs.addTab("Agreement",  agreementPanel);
+        resultsTabs.addTab("Kandidaten",  candidatesTab);
+        resultsTabs.addTab("Agreement",   agreementPanel);
+        resultsTabs.addTab("Accuracy",    accuracyPanel);
+        resultsTabs.addTab("FP/FN",       fpFnPanel);
+        resultsTabs.addTab("Reliabilität", reliabilityPanel);
         p.add(resultsTabs, BorderLayout.CENTER);
 
         statusBar = new JLabel(" ");
@@ -203,9 +215,18 @@ public class MainWindow extends JFrame {
         newBtn.addActionListener(e -> cardLayout.show(cards, CARD_SETUP));
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         buttons.add(openBtn); buttons.add(exportBtn); buttons.add(newBtn);
+        JButton secondReviewBtn = new JButton("Zweiter Reviewer\u2026");
+        secondReviewBtn.addActionListener(e -> onLoadSecondReview());
+        evaluateBtn = new JButton("Evaluieren");
+        evaluateBtn.setEnabled(false);
+        evaluateBtn.addActionListener(e -> onEvaluate());
+        JPanel evalButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        evalButtons.add(secondReviewBtn);
+        evalButtons.add(evaluateBtn);
         JPanel south = new JPanel(new BorderLayout(4, 0));
-        south.add(statusBar, BorderLayout.CENTER);
-        south.add(buttons, BorderLayout.EAST);
+        south.add(evalButtons,  BorderLayout.WEST);
+        south.add(statusBar,    BorderLayout.CENTER);
+        south.add(buttons,      BorderLayout.EAST);
         p.add(south, BorderLayout.SOUTH);
         return p;
     }
@@ -480,6 +501,58 @@ public class MainWindow extends JFrame {
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Ordner kann nicht geöffnet werden: " + ex.getMessage(), "Fehler", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Evaluation actions
+    // -------------------------------------------------------------------------
+
+    private void updateEvaluateButtonState() {
+        if (evaluateBtn == null) { return; }
+        boolean hasLabel = candidateTableModel.getAllLabels().stream()
+                .anyMatch(l -> l.getFinalLabel() != null);
+        evaluateBtn.setEnabled(hasLabel);
+    }
+
+    private void onLoadSecondReview() {
+        JFileChooser chooser = new JFileChooser(
+                currentOutputDir != null ? currentOutputDir.toFile() : new File("."));
+        chooser.setFileFilter(new FileNameExtensionFilter("CSV-Dateien", "csv"));
+        chooser.setDialogTitle("Zweiter-Reviewer-CSV laden");
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) { return; }
+        secondReviewFile = chooser.getSelectedFile().toPath();
+        JOptionPane.showMessageDialog(this,
+                "Zweiter-Reviewer-Datei geladen:\n" + secondReviewFile.getFileName(),
+                "Geladen", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void onEvaluate() {
+        if (currentOutputDir == null) {
+            JOptionPane.showMessageDialog(this, "Kein Output-Verzeichnis gesetzt.",
+                    "Fehler", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        evaluateBtn.setEnabled(false);
+        new EvaluationWorker(candidateTableModel, currentOutputDir, secondReviewFile,
+                result -> SwingUtilities.invokeLater(() -> onEvaluationComplete(result)),
+                error  -> SwingUtilities.invokeLater(() -> onEvaluationFailed(error))
+        ).execute();
+    }
+
+    private void onEvaluationComplete(EvaluationWorker.EvaluationResult result) {
+        accuracyPanel.update(result.toolMetrics);
+        fpFnPanel.update(result.fpFqcns, result.fnFqcns);
+        reliabilityPanel.update(result.reliability);
+        updateEvaluateButtonState();
+        JOptionPane.showMessageDialog(this, "Evaluation abgeschlossen.",
+                "Evaluation", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void onEvaluationFailed(Throwable error) {
+        updateEvaluateButtonState();
+        JOptionPane.showMessageDialog(this,
+                "Evaluation fehlgeschlagen:\n" + error.getMessage(),
+                "Fehler", JOptionPane.ERROR_MESSAGE);
     }
 
     // -------------------------------------------------------------------------
