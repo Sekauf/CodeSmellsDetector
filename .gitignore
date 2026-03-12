@@ -47,5 +47,8 @@ mnt/
 .env
 .env.*
 
+# Local run scripts with tokens
+run-gui.bat
+
 # Full IDE directory (specific files already listed above)
 .idea/
