@@ -24,7 +24,7 @@ class CandidateTableModelTest {
 
     @Test
     void columnCount() {
-        assertEquals(11, model.getColumnCount());
+        assertEquals(17, model.getColumnCount());
     }
 
     @Test
