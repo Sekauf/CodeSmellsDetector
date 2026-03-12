@@ -45,7 +45,7 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 | S-10 | Should-Have | 5 | ✅ | Tool-Agreement-Übersicht anzeigen (Jaccard + Venn) |
 | S-11 | Must-Have | 3 | ✅ | Ergebnisse exportieren (CSV/JSON/Markdown per Dialog) |
 | S-12 | Must-Have | 8 | ✅ | Inline-Labeling in der Tabelle (K1–K4, finalLabel) |
-| S-13 | Must-Have | 5 | ⬜ | Evaluation aus GUI starten (P/R/F1, FP/FN, Reliabilität) |
+| S-13 | Must-Have | 5 | ✅ | Evaluation aus GUI starten (P/R/F1, FP/FN, Reliabilität) |
 
 
 ## Randbedingungen
