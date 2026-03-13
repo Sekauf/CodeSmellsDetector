@@ -150,10 +150,12 @@ public class AnalysisOrchestrator {
 
         callback.onStep("Merge & Export\u2026", 85);
         List<CandidateDTO> merged = mergeCandidates(baselineCandidates, sonarCandidates, jdeodorantCandidates);
-        exporter.writeCsv(merged, outputDir);
-        exporter.writeJson(merged, outputDir);
+        String pn = outputDir != null && outputDir.getFileName() != null
+                ? outputDir.getFileName().toString() : "";
+        exporter.writeCsv(merged, outputDir, ResultExporter.csvFileName(pn));
+        exporter.writeJson(merged, outputDir, ResultExporter.jsonFileName(pn));
         List<CandidateDTO> labelingInput = buildLabelingInput(merged);
-        new LabelCsvExporter().export(labelingInput, outputDir.resolve("labeling_input.csv"));
+        new LabelCsvExporter().export(labelingInput, outputDir.resolve(ResultExporter.labelingFileName(pn)));
         LOGGER.info("Orchestrator finished. candidates=" + labelingInput.size());
         callback.onStep("Abgeschlossen", 100);
         return labelingInput;

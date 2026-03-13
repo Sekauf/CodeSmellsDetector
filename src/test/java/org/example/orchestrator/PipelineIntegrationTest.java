@@ -57,8 +57,9 @@ class PipelineIntegrationTest {
             orchestrator.run(projectRoot, thresholds, sonarConfig, jdeodorantConfig, outputDir);
             assertRunOutputs(outputDir);
 
+            String pn = outputDir.getFileName().toString();
             Path labelsFile = createAnnotatedLabelsFromLabelingInput(
-                    outputDir.resolve("labeling_input.csv"),
+                    outputDir.resolve(ResultExporter.labelingFileName(pn)),
                     outputDir.resolve("labels.csv")
             );
             orchestrator.evaluate(labelsFile, null, outputDir);
@@ -108,12 +109,13 @@ class PipelineIntegrationTest {
     }
 
     private void assertRunOutputs(Path outputDir) throws IOException {
-        assertTrue(Files.exists(outputDir.resolve("results.csv")), "results.csv must exist");
-        assertTrue(Files.exists(outputDir.resolve("results.json")), "results.json must exist");
-        assertTrue(Files.exists(outputDir.resolve("labeling_input.csv")), "labeling_input.csv must exist");
+        String pn = outputDir.getFileName().toString();
+        assertTrue(Files.exists(outputDir.resolve(ResultExporter.csvFileName(pn))),      ResultExporter.csvFileName(pn) + " must exist");
+        assertTrue(Files.exists(outputDir.resolve(ResultExporter.jsonFileName(pn))),     ResultExporter.jsonFileName(pn) + " must exist");
+        assertTrue(Files.exists(outputDir.resolve(ResultExporter.labelingFileName(pn))), ResultExporter.labelingFileName(pn) + " must exist");
 
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode runRoot = mapper.readTree(Files.readString(outputDir.resolve("results.json"), StandardCharsets.UTF_8));
+        JsonNode runRoot = mapper.readTree(Files.readString(outputDir.resolve(ResultExporter.jsonFileName(pn)), StandardCharsets.UTF_8));
         assertTrue(runRoot.has("candidates"), "results.json must contain candidates");
         assertTrue(runRoot.get("candidates").isArray(), "results.json.candidates must be an array");
         assertEquals(3, runRoot.get("candidates").size(), "Merged pipeline should contain 3 candidates");

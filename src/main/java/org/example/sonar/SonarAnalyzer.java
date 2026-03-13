@@ -155,6 +155,17 @@ public class SonarAnalyzer {
             throw new IOException("SonarQube scan failed with exit code " + scanResult.getExitCode()
                     + ". Output:\n" + scanResult.getOutput());
         }
+        if (scanResult.getCeTaskIdNullable() != null && !scanResult.getCeTaskIdNullable().isBlank()) {
+            ceTaskClient.waitForCompletion(
+                    config.getHostUrl(),
+                    config.getToken(),
+                    scanResult.getCeTaskIdNullable(),
+                    60,
+                    2000
+            );
+        } else {
+            LOGGER.warning("SonarQube scan output did not include ceTaskId; fetching issues without waiting.");
+        }
         List<SonarIssue> issues = issuesClient.fetchIssues(config);
         List<CandidateDTO> candidates = mapper.mapIssues(projectRoot, issues, config.getProjectKey());
 

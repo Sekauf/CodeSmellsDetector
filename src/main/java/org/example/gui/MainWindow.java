@@ -39,6 +39,7 @@ import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableRowSorter;
 import org.example.baseline.CandidateCsvUtil;
 import org.example.baseline.CandidateDTO;
+import org.example.export.ResultExporter;
 import org.example.labeling.LabelDTO;
 
 /**
@@ -399,7 +400,8 @@ public class MainWindow extends JFrame {
     private List<CandidateDTO> parseCandidatesFromCsv(Path outputDir) {
         List<CandidateDTO> result = new ArrayList<>();
         try {
-            List<String> lines = Files.readAllLines(outputDir.resolve("results.csv"), StandardCharsets.UTF_8);
+            String pn = outputDir.getFileName() != null ? outputDir.getFileName().toString() : "";
+            List<String> lines = Files.readAllLines(outputDir.resolve(ResultExporter.csvFileName(pn)), StandardCharsets.UTF_8);
             for (int i = 1; i < lines.size(); i++) {
                 if (lines.get(i).isBlank()) { continue; }
                 CandidateDTO dto = parseCsvRow(CandidateCsvUtil.parseCsvLine(lines.get(i)));
@@ -581,9 +583,11 @@ public class MainWindow extends JFrame {
     }
 
     private void onSaveLabels() {
+        String pn = currentOutputDir != null && currentOutputDir.getFileName() != null
+                ? currentOutputDir.getFileName().toString() : "";
         Path defaultPath = currentOutputDir != null
-                ? currentOutputDir.resolve("labeling_input.csv")
-                : Path.of("labeling_input.csv");
+                ? currentOutputDir.resolve(ResultExporter.labelingFileName(pn))
+                : Path.of(ResultExporter.labelingFileName(pn));
         JFileChooser chooser = new JFileChooser(defaultPath.getParent().toFile());
         chooser.setSelectedFile(defaultPath.toFile());
         chooser.setFileFilter(new FileNameExtensionFilter("CSV-Dateien", "csv"));

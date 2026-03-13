@@ -14,6 +14,7 @@ import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import org.example.baseline.BaselineThresholds;
+import org.example.export.ResultExporter;
 import org.example.jdeodorant.ProjectConfig;
 import org.example.logging.LoggingConfigurator;
 import org.example.orchestrator.AnalysisOrchestrator;
@@ -140,7 +141,11 @@ public class AnalysisWorker extends SwingWorker<Void, String> {
         if (outputDir == null || !Files.exists(outputDir)) {
             return;
         }
-        for (String name : List.of("results.csv", "results.json", "labeling_input.csv")) {
+        String pn = outputDir.getFileName() != null ? outputDir.getFileName().toString() : "";
+        for (String name : List.of(
+                ResultExporter.csvFileName(pn),
+                ResultExporter.jsonFileName(pn),
+                ResultExporter.labelingFileName(pn))) {
             try {
                 Files.deleteIfExists(outputDir.resolve(name));
             } catch (IOException ex) {
