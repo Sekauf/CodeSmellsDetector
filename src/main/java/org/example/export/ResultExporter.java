@@ -23,6 +23,29 @@ public class ResultExporter {
     private static final String RESULTS_JSON = "results.json";
     private static final String METRICS_JSON = "metrics.json";
 
+    // -------------------------------------------------------------------------
+    // File name helpers
+    // -------------------------------------------------------------------------
+
+    /** Returns the CSV results file name for the given project name. */
+    public static String csvFileName(String projectName) {
+        return isBlankStr(projectName) ? RESULTS_CSV : "results_" + projectName + ".csv";
+    }
+
+    /** Returns the JSON results file name for the given project name. */
+    public static String jsonFileName(String projectName) {
+        return isBlankStr(projectName) ? RESULTS_JSON : "results_" + projectName + ".json";
+    }
+
+    /** Returns the labeling input file name for the given project name. */
+    public static String labelingFileName(String projectName) {
+        return isBlankStr(projectName) ? "labeling_input.csv" : "labeling_input_" + projectName + ".csv";
+    }
+
+    private static boolean isBlankStr(String s) {
+        return s == null || s.isBlank();
+    }
+
     private static final List<String> CSV_HEADER = List.of(
             "fullyQualifiedClassName",
             "baselineFlag",
@@ -69,8 +92,12 @@ public class ResultExporter {
     }
 
     public Path writeCsv(List<CandidateDTO> candidates, Path outDir) throws IOException {
+        return writeCsv(candidates, outDir, RESULTS_CSV);
+    }
+
+    public Path writeCsv(List<CandidateDTO> candidates, Path outDir, String fileName) throws IOException {
         Path dir = createOutputDir(outDir);
-        Path target = dir.resolve(RESULTS_CSV);
+        Path target = dir.resolve(fileName);
         List<CandidateDTO> sorted = stableSorting(candidates);
         LOGGER.info("Export started: " + target);
 
@@ -107,12 +134,20 @@ public class ResultExporter {
     }
 
     public Path writeJson(List<CandidateDTO> candidates, Path outDir) throws IOException {
-        return writeJson(candidates, null, outDir);
+        return writeJson(candidates, null, outDir, RESULTS_JSON);
     }
 
     public Path writeJson(List<CandidateDTO> candidates, EvaluationMetrics metrics, Path outDir) throws IOException {
+        return writeJson(candidates, metrics, outDir, RESULTS_JSON);
+    }
+
+    public Path writeJson(List<CandidateDTO> candidates, Path outDir, String fileName) throws IOException {
+        return writeJson(candidates, null, outDir, fileName);
+    }
+
+    public Path writeJson(List<CandidateDTO> candidates, EvaluationMetrics metrics, Path outDir, String fileName) throws IOException {
         Path dir = createOutputDir(outDir);
-        Path target = dir.resolve(RESULTS_JSON);
+        Path target = dir.resolve(fileName);
         List<CandidateDTO> sorted = stableSorting(candidates);
         List<CandidateExportRow> rows = toRows(sorted);
         ResultsEnvelope envelope = new ResultsEnvelope(rows, metrics);

@@ -65,10 +65,11 @@ class AnalysisOrchestratorTest {
                 .build();
         BaselineThresholds thresholds = new BaselineThresholds(1, 1);
 
-        orchestrator.run(tempDir, thresholds, sonarConfig, null, tempDir);
+        Path outputDir = tempDir.resolve("test-project");
+        orchestrator.run(tempDir, thresholds, sonarConfig, null, outputDir);
 
-        Path labelingCsv = tempDir.resolve("labeling_input.csv");
-        assertTrue(Files.exists(labelingCsv), "labeling_input.csv must exist");
+        Path labelingCsv = outputDir.resolve(ResultExporter.labelingFileName("test-project"));
+        assertTrue(Files.exists(labelingCsv), ResultExporter.labelingFileName("test-project") + " must exist");
 
         List<String> lines = Files.readAllLines(labelingCsv);
         assertEquals(String.join(",", LabelCsvExporter.HEADER), lines.get(0), "Header row must match");
@@ -106,7 +107,7 @@ class AnalysisOrchestratorTest {
         List<Integer> percents = new ArrayList<>();
         ProgressCallback callback = (label, pct) -> { steps.add(label); percents.add(pct); };
 
-        orchestrator.run(tempDir, new BaselineThresholds(1, 1), sonarConfig, null, tempDir, callback);
+        orchestrator.run(tempDir, new BaselineThresholds(1, 1), sonarConfig, null, tempDir.resolve("cb-test"), callback);
 
         assertTrue(steps.size() >= 5, "Expected at least 5 progress steps, got " + steps.size());
         assertEquals(100, percents.get(percents.size() - 1), "Last progress value must be 100");
