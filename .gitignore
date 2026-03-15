@@ -4,10 +4,7 @@ target/
 !**/src/test/**/target/
 
 ### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -50,5 +47,14 @@ mnt/
 # Local run scripts with tokens
 run-gui.bat
 
-# Full IDE directory (specific files already listed above)
-.idea/
+# Maven Shade plugin artifact
+dependency-reduced-pom.xml
+
+# Claude Code / AI tooling (local only)
+.claude/
+AGENTS.md
+CLAUDE.md
+PROMPTS.md
+SKILL.md
+WORKFLOW.md
+REFERENCE.md

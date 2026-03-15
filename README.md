@@ -160,3 +160,7 @@ fqcn,errorType,methodCount,fieldCount,dependencyTypeCount,flags
 - Sampling fuer Blind-Negatives nutzt festen Seed `42` in der Pipeline.
 - Gleiche Eingaben + gleiche Tool-/Umgebungs-Versionen erzeugen reproduzierbare Artefakte.
 - Empfehlung: Java-/Maven-Versionen und externe Tool-Versionen (SonarQube, JDeodorant-Exportquelle) pro Run dokumentieren.
+
+## Lizenz
+
+Dieses Projekt ist unter der MIT-Lizenz lizenziert. Siehe [LICENSE](LICENSE) fuer Details.
