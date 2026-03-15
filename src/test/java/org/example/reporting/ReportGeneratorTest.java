@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.example.evaluation.OverlapResult;
 import org.example.metrics.EvaluationMetrics;
 import org.example.metrics.ReliabilityMetrics;
+import org.example.reporting.MultiProjectAggregator.AggregatedMetrics;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -183,11 +185,143 @@ class ReportGeneratorTest {
         assertTrue(content.contains("_No data._"));
     }
 
+
+    // == aggregated report tests ===============================================
+
+    @Test
+    void testGenerateAggregated_fileCreated() throws IOException {
+        Path file = new ReportGenerator().generateAggregated(
+                aggregatedMetrics(), perProject(), agreementPerProject(), tempDir);
+        assertTrue(Files.exists(file));
+        assertEquals("aggregated_report.md", file.getFileName().toString());
+    }
+
+    @Test
+    void testGenerateAggregated_containsTitle() throws IOException {
+        String content = generateAggregatedReport();
+        assertTrue(content.contains("# God-Class Detection"));
+        assertTrue(content.contains("Aggregated Report"));
+    }
+
+    @Test
+    void testGenerateAggregated_containsPerProjectSection() throws IOException {
+        String content = generateAggregatedReport();
+        assertTrue(content.contains("## Per-Project Summary"));
+        assertTrue(content.contains("| Project | Tool | P | R | F1 | MCC | TP | FP | FN | TN |"));
+    }
+
+    @Test
+    void testGenerateAggregated_perProjectContainsAllProjects() throws IOException {
+        String content = generateAggregatedReport();
+        assertTrue(content.contains("| projectA |"));
+        assertTrue(content.contains("| projectB |"));
+    }
+
+    @Test
+    void testGenerateAggregated_perProjectSortedAlphabetically() throws IOException {
+        String content = generateAggregatedReport();
+        int posA = content.indexOf("| projectA |");
+        int posB = content.indexOf("| projectB |");
+        assertTrue(posA < posB, "projectA should appear before projectB");
+    }
+
+    @Test
+    void testGenerateAggregated_containsMicroAverageSection() throws IOException {
+        String content = generateAggregatedReport();
+        assertTrue(content.contains("## Aggregated Metrics (Micro-Average)"));
+        assertTrue(content.contains("| Tool | P | R | F1 | MCC |"));
+    }
+
+    @Test
+    void testGenerateAggregated_containsMacroAverageSection() throws IOException {
+        String content = generateAggregatedReport();
+        assertTrue(content.contains("## Aggregated Metrics (Macro-Average"));
+    }
+
+    @Test
+    void testGenerateAggregated_macroShowsMeanPlusMinusStdDev() throws IOException {
+        String content = generateAggregatedReport();
+        assertTrue(content.contains("±"), "Macro section should contain +/- symbol");
+    }
+
+    @Test
+    void testGenerateAggregated_valuesFormattedTo4Decimals() throws IOException {
+        String content = generateAggregatedReport();
+        assertTrue(content.contains("0.8333"));
+    }
+
+    @Test
+    void testGenerateAggregated_containsAgreementPerProjectSection() throws IOException {
+        String content = generateAggregatedReport();
+        assertTrue(content.contains("## Tool Agreement (per project)"));
+        assertTrue(content.contains("### projectA"));
+        assertTrue(content.contains("### projectB"));
+    }
+
+    @Test
+    void testGenerateAggregated_toolOrderCorrect() throws IOException {
+        String content = generateAggregatedReport();
+        String microSection = content.substring(content.indexOf("## Aggregated Metrics (Micro-Average)"));
+        int posBaseline = microSection.indexOf("| baseline |");
+        int posSonar = microSection.indexOf("| sonarqube |");
+        assertTrue(posBaseline < posSonar, "baseline should precede sonarqube");
+    }
+
+    @Test
+    void testGenerateAggregated_emptyInput_showsNoData() throws IOException {
+        Path file = new ReportGenerator().generateAggregated(
+                Map.of(), Map.of(), Map.of(), tempDir);
+        String content = Files.readString(file);
+        assertTrue(content.contains("_No data._"));
+    }
+
+    @Test
+    void testGenerateAggregated_confusionValuesPresent() throws IOException {
+        String content = generateAggregatedReport();
+        assertTrue(content.contains("| 5 | 1 | 2 | 42 |"));
+    }
+
     // ── helper ────────────────────────────────────────────────────────────────
 
     private String generateReport() throws IOException {
         Path file = new ReportGenerator()
                 .generate(PROJECT, TOTAL, toolMetrics(), agreement(), reliability(), tempDir);
+        return Files.readString(file);
+    }
+
+    // == aggregated report helpers =============================================
+
+    private static Map<String, Map<String, EvaluationMetrics>> perProject() {
+        Map<String, Map<String, EvaluationMetrics>> map = new LinkedHashMap<>();
+        map.put("projectA", Map.of(
+                "baseline",  new EvaluationMetrics(5, 1, 2, 42, 0.8333, 0.7143, 0.7692, 0.7206, 0.9767),
+                "sonarqube", new EvaluationMetrics(4, 2, 3, 41, 0.6667, 0.5714, 0.6154, 0.5443, 0.9535)
+        ));
+        map.put("projectB", Map.of(
+                "baseline",  new EvaluationMetrics(3, 0, 1, 46, 1.0, 0.75, 0.8571, 0.8528, 1.0),
+                "sonarqube", new EvaluationMetrics(2, 1, 2, 45, 0.6667, 0.5, 0.5714, 0.5222, 0.9783)
+        ));
+        return map;
+    }
+
+    private static Map<String, AggregatedMetrics> aggregatedMetrics() {
+        return MultiProjectAggregator.aggregate(perProject());
+    }
+
+    private static Map<String, List<OverlapResult>> agreementPerProject() {
+        Map<String, List<OverlapResult>> map = new LinkedHashMap<>();
+        map.put("projectA", List.of(
+                new OverlapResult("baseline", "sonarqube", 0.5, 4, 2, 2)
+        ));
+        map.put("projectB", List.of(
+                new OverlapResult("baseline", "sonarqube", 0.4, 2, 1, 1)
+        ));
+        return map;
+    }
+
+    private String generateAggregatedReport() throws IOException {
+        Path file = new ReportGenerator().generateAggregated(
+                aggregatedMetrics(), perProject(), agreementPerProject(), tempDir);
         return Files.readString(file);
     }
 }

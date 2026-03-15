@@ -14,15 +14,20 @@ import java.util.logging.Logger;
 import org.example.evaluation.OverlapResult;
 import org.example.metrics.EvaluationMetrics;
 import org.example.metrics.ReliabilityMetrics;
+import java.util.Locale;
+import java.util.Set;
+import java.util.TreeSet;
+import org.example.reporting.MultiProjectAggregator.AggregatedMetrics;
 
 /**
- * Generates a Markdown report ({@code report.md}) summarising God-Class detection results.
- * Sections: metadata/statistics, metrics per tool, confusion matrices, tool agreement, reliability.
+ * Generates Markdown reports summarising God-Class detection results.
+ * Supports single-project ({@code report.md}) and multi-project ({@code aggregated_report.md}).
  */
 public class ReportGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(ReportGenerator.class.getName());
     private static final String OUTPUT_FILE = "report.md";
+    private static final String AGGREGATED_FILE = "aggregated_report.md";
     private static final List<String> TOOL_ORDER = List.of("baseline", "jdeodorant", "sonarqube");
 
     /**
@@ -58,6 +63,38 @@ public class ReportGenerator {
         Files.writeString(file, content, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         LOGGER.info("ReportGenerator.generate finished: file=" + file);
+        return file;
+    }
+
+    /**
+     * Generates aggregated_report.md summarising God-Class detection across multiple projects.
+     *
+     * @param aggregated          per-tool aggregated metrics (micro/macro)
+     * @param perProject          per-project per-tool evaluation metrics
+     * @param agreementPerProject per-project pairwise tool-agreement results
+     * @param outputDir           target directory (created if absent)
+     * @return path of the written file
+     * @throws IOException on write failure
+     */
+    public Path generateAggregated(
+            Map<String, AggregatedMetrics> aggregated,
+            Map<String, Map<String, EvaluationMetrics>> perProject,
+            Map<String, List<OverlapResult>> agreementPerProject,
+            Path outputDir
+    ) throws IOException {
+        LOGGER.info("ReportGenerator.generateAggregated started");
+        Files.createDirectories(outputDir);
+
+        String content = buildAggregatedHeader()
+                + buildPerProjectSummary(perProject)
+                + buildMicroAverageTable(aggregated)
+                + buildMacroAverageTable(aggregated)
+                + buildAgreementPerProject(agreementPerProject);
+
+        Path file = outputDir.resolve(AGGREGATED_FILE);
+        Files.writeString(file, content, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        LOGGER.info("ReportGenerator.generateAggregated finished: file=" + file);
         return file;
     }
 
@@ -143,9 +180,13 @@ public class ReportGenerator {
     }
 
     private List<String> sortKeys(Map<String, EvaluationMetrics> metrics) {
+        return sortToolKeys(metrics.keySet());
+    }
+
+    private List<String> sortToolKeys(Set<String> keys) {
         List<String> known = new ArrayList<>();
         List<String> others = new ArrayList<>();
-        for (String key : metrics.keySet()) {
+        for (String key : keys) {
             if (TOOL_ORDER.contains(key)) {
                 known.add(key);
             } else {
@@ -159,7 +200,117 @@ public class ReportGenerator {
     }
 
     private String fmt(double value) {
-        return String.format(java.util.Locale.ROOT, "%.4f", value);
+        return String.format(Locale.ROOT, "%.4f", value);
+    }
+
+
+    // -- aggregated report helpers --------------------------------------------
+
+    private String buildAggregatedHeader() {
+        return "# God-Class Detection \u2013 Aggregated Report\n\n";
+    }
+
+    private String buildPerProjectSummary(Map<String, Map<String, EvaluationMetrics>> perProject) {
+        if (perProject == null || perProject.isEmpty()) {
+            return "## Per-Project Summary\n\n_No data._\n\n";
+        }
+        StringBuilder sb = new StringBuilder("## Per-Project Summary\n\n");
+        sb.append("| Project | Tool | P | R | F1 | MCC | TP | FP | FN | TN |\n");
+        sb.append("|---------|------|---|---|----|----|----|----|----|----|----|\n");
+        for (String project : new TreeSet<>(perProject.keySet())) {
+            Map<String, EvaluationMetrics> tools = perProject.get(project);
+            if (tools == null) {
+                continue;
+            }
+            for (String tool : sortToolKeys(tools.keySet())) {
+                appendPerProjectRow(sb, project, tool, tools.get(tool));
+            }
+        }
+        return sb.append("\n").toString();
+    }
+
+    private void appendPerProjectRow(StringBuilder sb, String project, String tool,
+                                     EvaluationMetrics m) {
+        sb.append("| ").append(project)
+          .append(" | ").append(tool)
+          .append(" | ").append(fmt(m.getPrecision()))
+          .append(" | ").append(fmt(m.getRecall()))
+          .append(" | ").append(fmt(m.getF1Score()))
+          .append(" | ").append(fmt(m.getMcc()))
+          .append(" | ").append(m.getTruePositives())
+          .append(" | ").append(m.getFalsePositives())
+          .append(" | ").append(m.getFalseNegatives())
+          .append(" | ").append(m.getTrueNegatives())
+          .append(" |\n");
+    }
+
+    private String buildMicroAverageTable(Map<String, AggregatedMetrics> aggregated) {
+        if (aggregated == null || aggregated.isEmpty()) {
+            return "## Aggregated Metrics (Micro-Average)\n\n_No data._\n\n";
+        }
+        StringBuilder sb = new StringBuilder("## Aggregated Metrics (Micro-Average)\n\n");
+        sb.append("| Tool | P | R | F1 | MCC |\n");
+        sb.append("|------|---|---|----|-----|\n");
+        for (String tool : sortToolKeys(aggregated.keySet())) {
+            EvaluationMetrics m = aggregated.get(tool).microAverage();
+            sb.append("| ").append(tool)
+              .append(" | ").append(fmt(m.getPrecision()))
+              .append(" | ").append(fmt(m.getRecall()))
+              .append(" | ").append(fmt(m.getF1Score()))
+              .append(" | ").append(fmt(m.getMcc()))
+              .append(" |\n");
+        }
+        return sb.append("\n").toString();
+    }
+
+    private String buildMacroAverageTable(Map<String, AggregatedMetrics> aggregated) {
+        if (aggregated == null || aggregated.isEmpty()) {
+            return "## Aggregated Metrics (Macro-Average \u00b1 StdDev)\n\n_No data._\n\n";
+        }
+        StringBuilder sb = new StringBuilder("## Aggregated Metrics (Macro-Average \u00b1 StdDev)\n\n");
+        sb.append("| Tool | P | R | F1 | MCC |\n");
+        sb.append("|------|---|---|----|-----|\n");
+        for (String tool : sortToolKeys(aggregated.keySet())) {
+            AggregatedMetrics a = aggregated.get(tool);
+            sb.append("| ").append(tool)
+              .append(" | ").append(fmtMacro(a.macroPrecision(), a.stdPrecision()))
+              .append(" | ").append(fmtMacro(a.macroRecall(), a.stdRecall()))
+              .append(" | ").append(fmtMacro(a.macroF1(), a.stdF1()))
+              .append(" | ").append(fmtMacro(a.macroMcc(), a.stdMcc()))
+              .append(" |\n");
+        }
+        return sb.append("\n").toString();
+    }
+
+    private String buildAgreementPerProject(Map<String, List<OverlapResult>> agreementPerProject) {
+        if (agreementPerProject == null || agreementPerProject.isEmpty()) {
+            return "## Tool Agreement (per project)\n\n_No data._\n\n";
+        }
+        StringBuilder sb = new StringBuilder("## Tool Agreement (per project)\n\n");
+        for (String project : new TreeSet<>(agreementPerProject.keySet())) {
+            List<OverlapResult> results = agreementPerProject.get(project);
+            if (results == null || results.isEmpty()) {
+                continue;
+            }
+            sb.append("### ").append(project).append("\n\n");
+            sb.append("| Tool A | Tool B | Jaccard | Both | Only A | Only B |\n");
+            sb.append("|--------|--------|---------|------|--------|--------|\n");
+            for (OverlapResult r : results) {
+                sb.append("| ").append(r.getToolA())
+                  .append(" | ").append(r.getToolB())
+                  .append(" | ").append(fmt(r.getJaccard()))
+                  .append(" | ").append(r.getBoth())
+                  .append(" | ").append(r.getOnlyA())
+                  .append(" | ").append(r.getOnlyB())
+                  .append(" |\n");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    private String fmtMacro(double mean, double stdDev) {
+        return String.format(Locale.ROOT, "%.4f \u00b1 %.4f", mean, stdDev);
     }
 
     private String safe(String value) {
