@@ -411,3 +411,477 @@ S-08 → S-12 → S-13
 - **Package:** Neue Klassen in `org.example.gui` (bestehend) und `org.example.gui.panels` (neu)
 - **CandidateDTO:** Zentrales DTO, wird NICHT geändert (siehe Context_Code.md)
 - **Testing:** Unit-Tests für ConfigMapper, AgreementCalculator, CompositeRowFilter; GUI-Tests optional
+
+# Feature-Backlog: Offene Stories
+
+**Basiert auf:** Code-Review März 2026 vs. Exposé-Anforderungen  
+**Konvention:** Gleiche Struktur wie PROMPTS.md / AGENTS.md  
+**Regel:** baseline/, sonar/, jdeodorant/ Packages werden NICHT verändert – nur neue Klassen oder Erweiterungen in metrics/, orchestrator/, cli/, reporting/
+
+---
+
+## Übersicht & Abhängigkeiten
+
+```
+US-15 ─────────────────────────────────────── (unabhängig, P1)
+US-16 ──→ US-17 ──→ US-18 ──→ US-19         (Kern-Kette, P0)
+US-20 ─────────────────────────────────────── (unabhängig, P2)
+US-21 ─────────────────────────────────────── (unabhängig, P2)
+```
+
+| Story | Prio | SP | Abhängigkeit | Beschreibung |
+|-------|------|----|-------------|--------------|
+| US-15 | P1   | 3  | keine       | Bootstrap-Konfidenzintervalle für MetricsEngine |
+| US-16 | P0   | 2  | keine       | CLI: Multi-Projekt-Batch-Modus |
+| US-17 | P0   | 3  | US-16       | Multi-Projekt-Aggregation (Micro/Macro-Average) |
+| US-18 | P0   | 2  | US-17       | ReportGenerator: Aggregierten Report erzeugen |
+| US-19 | P0   | 1  | US-17       | CLI: --aggregate Flag für Gesamtauswertung |
+| US-20 | P2   | 2  | keine       | Sensitivitätsanalyse (Label-Threshold parametrierbar) |
+| US-21 | P2   | 1  | keine       | Repo-Hygiene: Aufräumen für Abgabe |
+
+**Geschätzter Gesamtaufwand:** ~14 Story Points (~3–4 Arbeitstage)
+
+---
+
+## US-15: Bootstrap-Konfidenzintervalle
+
+**Priorität:** P1 – Im Exposé versprochen, stärkt statistische Aussagekraft  
+**Story Points:** 3  
+**Abhängigkeit:** Keine  
+**Package:** `metrics/` (neue Klasse)
+
+### Ziel
+
+```
+NEU: src/main/java/org/example/metrics/BootstrapConfidenceInterval.java
+NEU: src/test/java/org/example/metrics/BootstrapConfidenceIntervalTest.java
+ÄNDERN: src/main/java/org/example/metrics/EvaluationMetrics.java (optionale CI-Felder)
+```
+
+### Kontext
+
+Das Exposé verspricht: „95%-Konfidenzintervalle via Bootstrap." `MetricsEngine.computeMetrics()` liefert bisher nur Punktschätzer. Bei kleinen Fallzahlen (79 Kandidaten, davon ~5–15 God Classes) sind CIs wissenschaftlich zwingend nötig.
+
+### Spezifikation
+
+```
+Klasse: BootstrapConfidenceInterval
+Package: org.example.metrics
+
+public record ConfidenceInterval(double lower, double upper, double pointEstimate) {}
+
+public record BootstrapResult(
+    EvaluationMetrics pointEstimates,
+    ConfidenceInterval precisionCI,
+    ConfidenceInterval recallCI,
+    ConfidenceInterval f1CI,
+    ConfidenceInterval mccCI
+) {}
+
+public static BootstrapResult computeWithCI(
+    Set<String> predicted,
+    Set<String> actual,
+    int totalItems,
+    int nBootstrap,    // Default: 10000
+    long seed          // Default: 42
+)
+```
+
+**Algorithmus:**
+1. Erstelle Liste aller Items (TP/FP/FN/TN-Zuordnung)
+2. Für i = 1..nBootstrap:
+    - Ziehe mit Zurücklegen (Bootstrap-Sample, Größe = totalItems)
+    - Berechne P/R/F1/MCC auf dem Sample
+3. Sortiere die nBootstrap Werte je Metrik
+4. CI = [Perzentil 2.5%, Perzentil 97.5%]
+
+**Seed:** `new Random(seed)` für Determinismus.
+
+### Constraints
+
+- `MetricsEngine` NICHT ändern – neue Klasse daneben
+- `EvaluationMetrics` erweitern ist erlaubt (optionale CI-Felder, Rückwärtskompatibel)
+- Keine neuen Maven-Dependencies
+
+### Akzeptanzkriterien
+
+```
+□ BootstrapConfidenceInterval.computeWithCI() liefert BootstrapResult
+□ Bei perfekter Übereinstimmung: CI = [1.0, 1.0] für P/R/F1
+□ Bei totalItems=0: leere/sinnvolle Defaults, kein Crash
+□ Seed 42 liefert bei gleichen Inputs identische CIs
+□ Test mit bekanntem Setup: tp=5, fp=2, fn=3, tn=40 → CI-Breiten plausibel
+□ mvn test grün
+```
+
+---
+
+## US-16: CLI Multi-Projekt-Batch-Modus
+
+**Priorität:** P0 – Exposé verspricht 3 Projekte  
+**Story Points:** 2  
+**Abhängigkeit:** Keine  
+**Package:** `cli/` (Main erweitern)
+
+### Ziel
+
+```
+ÄNDERN: src/main/java/org/example/cli/Main.java (neues --batch Flag)
+NEU: src/test/java/org/example/cli/MainBatchTest.java (optional, CLI-Tests sind schwer)
+```
+
+### Kontext
+
+Aktuell analysiert die CLI ein Projekt pro Aufruf. Für die Bachelorarbeit müssen 3 Projekte sequentiell durch die Pipeline. Ein Batch-Modus erspart manuelles Dreifach-Ausführen und dokumentiert den Gesamtlauf.
+
+### Spezifikation
+
+Neues CLI-Pattern:
+
+```bash
+# Batch-Analyse: 3 Projekte nacheinander
+java -jar target/CodeSmellsDetector.jar --batch \
+  --project /path/to/projectA --jdeodorant-csv /data/jd-A.csv \
+  --project /path/to/projectB --jdeodorant-csv /data/jd-B.csv \
+  --project /path/to/projectC --jdeodorant-csv /data/jd-C.csv \
+  --run-sonar --output output
+
+# Ergebnis-Struktur:
+# output/projectA/results.csv, labeling_input.csv, ...
+# output/projectB/results.csv, labeling_input.csv, ...
+# output/projectC/results.csv, labeling_input.csv, ...
+```
+
+**Alternative (einfacher):** Kein neues Flag, sondern ein Shell-Skript `scripts/run_batch.sh` das 3× die CLI aufruft. Das ist pragmatischer und reicht für die Arbeit.
+
+```bash
+#!/bin/bash
+# scripts/run_batch.sh
+set -e
+PROJECTS=("projectA" "projectB" "projectC")
+PATHS=("/path/to/A" "/path/to/B" "/path/to/C")
+JD_CSVS=("jd-A.csv" "jd-B.csv" "jd-C.csv")
+
+mvn -q compile
+for i in "${!PROJECTS[@]}"; do
+  echo "=== ${PROJECTS[$i]} ==="
+  java -cp target/classes org.example.cli.Main \
+    --project "${PATHS[$i]}" \
+    --run-sonar \
+    --jdeodorant-csv "${JD_CSVS[$i]}" \
+    --output "output/${PROJECTS[$i]}"
+done
+```
+
+### Akzeptanzkriterien
+
+```
+□ Skript/Batch erzeugt pro Projekt ein Unterverzeichnis in output/
+□ Jedes Unterverzeichnis enthält: results.csv, results.json, labeling_input.csv
+□ Projekte werden sequentiell analysiert (kein Parallel-Problem mit SonarQube)
+□ Skript bricht bei Fehler ab (set -e)
+```
+
+---
+
+## US-17: Multi-Projekt-Aggregation
+
+**Priorität:** P0 – Ohne Aggregation keine Gesamtaussage über 3 Projekte  
+**Story Points:** 3  
+**Abhängigkeit:** US-16 (3 Projekte müssen analysiert + evaluiert sein)  
+**Package:** `reporting/` (neue Klasse)
+
+### Ziel
+
+```
+NEU: src/main/java/org/example/reporting/MultiProjectAggregator.java
+NEU: src/test/java/org/example/reporting/MultiProjectAggregatorTest.java
+```
+
+### Kontext
+
+Die Evaluation läuft derzeit pro Projekt (eine `metrics_summary.csv` pro Projekt). Für die Bachelorarbeit braucht es:
+- **Micro-Average:** TP/FP/FN/TN über alle Projekte summieren, dann P/R/F1/MCC berechnen
+- **Macro-Average:** P/R/F1/MCC pro Projekt, dann Mittelwert + Standardabweichung
+
+### Spezifikation
+
+```java
+package org.example.reporting;
+
+public class MultiProjectAggregator {
+
+    public record AggregatedMetrics(
+        EvaluationMetrics microAverage,
+        double macroPrecision, double macroRecall, double macroF1, double macroMcc,
+        double stdPrecision, double stdRecall, double stdF1, double stdMcc,
+        int projectCount
+    ) {}
+
+    /**
+     * Aggregiert Metriken über mehrere Projekte.
+     * @param perProject Map von Projektname → (Map von Toolname → EvaluationMetrics)
+     * @return Map von Toolname → AggregatedMetrics
+     */
+    public static Map<String, AggregatedMetrics> aggregate(
+            Map<String, Map<String, EvaluationMetrics>> perProject) { ... }
+
+    /**
+     * Exportiert aggregierte Metriken als CSV.
+     * Header: tool,microP,microR,microF1,microMCC,macroP,macroR,macroF1,macroMCC,
+     *         stdP,stdR,stdF1,stdMCC,projects
+     */
+    public static Path exportCsv(
+            Map<String, AggregatedMetrics> aggregated, Path outputDir) throws IOException { ... }
+}
+```
+
+### Akzeptanzkriterien
+
+```
+□ Micro-Average: korrekte Summation (tp_total = Σ tp_i)
+□ Macro-Average: korrekte Mittelwerte (macroP = mean(P_i))
+□ Standardabweichung: Populations-StdDev (nicht Stichproben-StdDev, da N=3 klein)
+□ Bei 1 Projekt: Micro = Macro = Einzelwert, StdDev = 0
+□ Bei 0 Projekten: leere Map, kein Crash
+□ CSV-Export: deterministische Reihenfolge (baseline, jdeodorant, sonar)
+□ mvn test grün
+```
+
+---
+
+## US-18: Aggregierten Report erzeugen
+
+**Priorität:** P0 – Gesamtübersicht für die Arbeit  
+**Story Points:** 2  
+**Abhängigkeit:** US-17  
+**Package:** `reporting/` (ReportGenerator erweitern)
+
+### Ziel
+
+```
+ÄNDERN: src/main/java/org/example/reporting/ReportGenerator.java (neue Methode)
+ÄNDERN: src/test/java/org/example/reporting/ReportGeneratorTest.java (neuer Test)
+```
+
+### Spezifikation
+
+Neue Methode in `ReportGenerator`:
+
+```java
+/**
+ * Erzeugt aggregated_report.md mit Gesamtübersicht über alle Projekte.
+ */
+public Path generateAggregated(
+    Map<String, AggregatedMetrics> aggregated,
+    Map<String, Map<String, EvaluationMetrics>> perProject,
+    Map<String, List<OverlapResult>> agreementPerProject,
+    Path outputDir
+) throws IOException { ... }
+```
+
+**Report-Struktur:**
+
+```markdown
+# God-Class Detection – Aggregated Report
+
+## Per-Project Summary
+| Project | Tool | P | R | F1 | MCC | TP | FP | FN | TN |
+|---------|------|...|...|....|-----|----|----|----|----|
+
+## Aggregated Metrics (Micro-Average)
+| Tool | P | R | F1 | MCC |
+|------|...|...|....|-----|
+
+## Aggregated Metrics (Macro-Average ± StdDev)
+| Tool | P | R | F1 | MCC |
+|------|...|...|....|-----|
+
+## Tool Agreement (per project)
+...
+```
+
+### Akzeptanzkriterien
+
+```
+□ Report enthält alle Sektionen
+□ Zahlen auf 4 Dezimalstellen formatiert (wie bestehender Report)
+□ Macro-Zeile zeigt mean ± stddev (z.B. "0.7500 ± 0.1200")
+□ mvn test grün
+```
+
+---
+
+## US-19: CLI --aggregate Flag
+
+**Priorität:** P0 – Verbindet US-17/US-18 mit dem CLI  
+**Story Points:** 1  
+**Abhängigkeit:** US-17, US-18  
+**Package:** `cli/`, `orchestrator/`
+
+### Ziel
+
+```
+ÄNDERN: src/main/java/org/example/cli/Main.java (neues Flag)
+ÄNDERN: src/main/java/org/example/orchestrator/AnalysisOrchestrator.java (neue Methode)
+```
+
+### Spezifikation
+
+```bash
+# Nach dem Evaluieren aller 3 Projekte:
+java -jar target/CodeSmellsDetector.jar --aggregate \
+  --labels output/projectA/labeling_input.csv \
+  --labels output/projectB/labeling_input.csv \
+  --labels output/projectC/labeling_input.csv \
+  --output output/aggregated
+```
+
+Oder einfacher (ein Verzeichnis mit Unterordnern):
+
+```bash
+java -jar target/CodeSmellsDetector.jar --aggregate \
+  --output-root output \
+  --output output/aggregated
+```
+
+Die Methode scannt `output/*/metrics_summary.csv` und aggregiert.
+
+### Akzeptanzkriterien
+
+```
+□ CLI erkennt --aggregate Flag
+□ Liest metrics_summary.csv aus allen Unterordnern
+□ Erzeugt output/aggregated/aggregated_metrics.csv + aggregated_report.md
+□ mvn test grün
+```
+
+---
+
+## US-20: Sensitivitätsanalyse (Label-Threshold)
+
+**Priorität:** P2 – Im Exposé als Gegenmaßnahme für Construct Validity versprochen  
+**Story Points:** 2  
+**Abhängigkeit:** Keine (aber sinnvoll erst nach Labeling)  
+**Package:** `orchestrator/`, `cli/`
+
+### Ziel
+
+```
+ÄNDERN: src/main/java/org/example/orchestrator/AnalysisOrchestrator.java
+ÄNDERN: src/main/java/org/example/cli/Main.java
+```
+
+### Kontext
+
+`LabelDTO.deriveLabel()` hat bereits drei Stufen:
+- ≥ 3/4 Kriterien → GOD_CLASS
+- 2/4 Kriterien → UNCERTAIN
+- ≤ 1/4 Kriterien → NO
+
+Die Sensitivitätsanalyse braucht zwei Durchläufe:
+1. **Streng (4/4):** Nur GOD_CLASS, UNCERTAIN → NO
+2. **Liberal (3/4):** GOD_CLASS, UNCERTAIN → GOD_CLASS (oder wie bisher ≥3)
+
+### Spezifikation
+
+Neues CLI-Flag:
+
+```bash
+java -jar target/CodeSmellsDetector.jar --evaluate \
+  --labels output/labeling_input.csv \
+  --label-threshold 4 \       # Streng: nur 4/4 = God Class
+  --output output/sensitivity_strict
+
+java -jar target/CodeSmellsDetector.jar --evaluate \
+  --labels output/labeling_input.csv \
+  --label-threshold 2 \       # Liberal: 2/4 = God Class (uncertain → positive)
+  --output output/sensitivity_liberal
+```
+
+**Implementation:** In `AnalysisOrchestrator.evaluate()` den `buildGroundTruth()`-Schritt erweitern:
+
+```java
+// Statt nur GOD_CLASS als positiv:
+private Map<String, Boolean> buildGroundTruth(Map<String, LabelDTO> labels, int threshold) {
+    Map<String, Boolean> truth = new LinkedHashMap<>();
+    for (Map.Entry<String, LabelDTO> entry : labels.entrySet()) {
+        LabelDTO label = entry.getValue();
+        int trueCount = countTrue(label.getK1()) + countTrue(label.getK2())
+                       + countTrue(label.getK3()) + countTrue(label.getK4());
+        truth.put(entry.getKey(), trueCount >= threshold);
+    }
+    return truth;
+}
+```
+
+### Akzeptanzkriterien
+
+```
+□ --label-threshold akzeptiert Werte 1–4
+□ Default bleibt 3 (wie bisher)
+□ threshold=4 erzeugt weniger Ground-Truth-Positive (strengere Evaluation)
+□ threshold=2 erzeugt mehr Ground-Truth-Positive
+□ Alle Evaluation-Outputs werden korrekt erzeugt
+□ mvn test grün
+```
+
+---
+
+## US-21: Repo-Hygiene für Abgabe
+
+**Priorität:** P2 – Kosmetisch, aber wichtig für Eindruck beim Betreuer  
+**Story Points:** 1  
+**Abhängigkeit:** Keine  
+**Package:** Kein Java-Code
+
+### Aufgaben
+
+```
+□ dependency-reduced-pom.xml löschen + in .gitignore aufnehmen
+□ AGENTS.md, CLAUDE.md, PROMPTS.md, SKILL.md, WORKFLOW.md, REFERENCE.md
+  → in .gitignore aufnehmen ODER in Branch "tooling" verschieben
+□ .claude/ Verzeichnis aus Repo entfernen + in .gitignore
+□ mnt/ Verzeichnis aus Repo entfernen (schon in .gitignore, aber im ZIP enthalten)
+□ output/ Verzeichnis: sicherstellen, dass es wirklich nicht committed ist
+□ Context_Code.md: "TODO-LINK-EINFUEGEN" → "https://github.com/Sekauf/CodeSmellsDetector"
+□ README.md: Lizenz-Hinweis ergänzen (MIT oder Apache 2.0)
+□ Optional: GitHub Actions CI (.github/workflows/ci.yml)
+□ .idea/ komplett in .gitignore (spezifische Dateien schon drin, aber Verzeichnis noch teilweise getrackt)
+```
+
+### Akzeptanzkriterien
+
+```
+□ git status zeigt keine untracked/ignored Dateien die ins Repo gehören
+□ git clone auf frischem Rechner → mvn clean test → grün
+□ Keine Claude/Codex-spezifischen Dateien im main Branch sichtbar
+□ README enthält: Zweck, Build-Anleitung, CLI-Usage, Lizenz
+```
+
+---
+
+## Zeitplan-Empfehlung
+
+```
+Tag 1:  US-16 (Batch-Skript) + US-15 (Bootstrap-CIs)
+Tag 2:  US-17 (Aggregation) + US-18 (Aggregierter Report)
+Tag 3:  US-19 (CLI --aggregate) + US-20 (Sensitivitätsanalyse)
+Tag 4:  US-21 (Repo-Hygiene) + Puffer/Bugfixes
+
+Parallel zu Tag 1–4: Labeling der 79 JFreeChart-Kandidaten (manuell, ~4h)
+Danach: 2 weitere Projekte analysieren + labeln
+```
+
+---
+
+## Was diese Stories NICHT abdecken (bewusst)
+
+**Baseline-Operationalisierung (WMC/TCC/ATFD):** Die leeren Klassen `GodClassRule` und `BaselineMetricsCalculator` werden bewusst NICHT als Story aufgenommen. Begründung:
+
+1. TCC erfordert Data-Flow-Analyse (welche Methoden teilen welche Attribute) – das ist mit JavaParser machbar, aber ~500+ LOC und fehleranfällig.
+2. ATFD erfordert vollständige Typauflösung (Zugriffe auf fremde Attribute) – JavaParser ohne Symbolsolver kann das nicht zuverlässig.
+3. Der Zeitrahmen erlaubt es nicht mehr realistisch.
+
+**Empfehlung für die Arbeit:** In Kapitel 5 (Implementierung) transparent beschreiben:
+> „Der Baseline-Detektor verwendet als Größenmetrik die Summe aus Methoden- und Feldanzahl sowie die Anzahl referenzierter Typen. Diese vereinfachte Operationalisierung wurde gewählt, da eine robuste Berechnung von TCC und ATFD eine vollständige Typauflösung erfordert, die im Rahmen dieser Arbeit nicht realisierbar war. Die Abweichung von der im Exposé beschriebenen Marinescu-Detection-Strategy wird in Abschnitt 7.3 als Threat to Construct Validity diskutiert."

@@ -48,6 +48,18 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 | S-13 | Must-Have | 5 | ✅ | Evaluation aus GUI starten (P/R/F1, FP/FN, Reliabilität) |
 
 
+### Phase 3: Multi-Projekt-Batch & Aggregation
+
+| Story | Priorität | Status | Beschreibung |
+|-------|-----------|--------|-------------|
+| US-15 | P1 | ✅ | Bootstrap-Konfidenzintervalle |
+| US-16 | P0 | ✅ | CLI Multi-Projekt-Batch-Skript |
+| US-17 | P1 | ⬜ | Aggregation ueber Projekte |
+| US-18 | P1 | ⬜ | Aggregierter Report |
+| US-19 | P1 | ⬜ | CLI --aggregate Flag |
+| US-20 | P2 | ⬜ | Sensitivitaetsanalyse |
+| US-21 | P2 | ⬜ | Repo-Hygiene |
+
 ## Randbedingungen
 
 Java 17, Maven, JUnit 5+4, Jackson 2.17.2. `mvn test` muss **immer** grün sein.
