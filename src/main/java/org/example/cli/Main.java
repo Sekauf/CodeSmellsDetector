@@ -54,7 +54,7 @@ public class Main {
         }
         Path secondReview = parsed.secondReviewLabelsPath == null
                 ? null : Path.of(parsed.secondReviewLabelsPath);
-        orchestrator.evaluate(Path.of(parsed.labelsPath), secondReview, outputDir);
+        orchestrator.evaluate(Path.of(parsed.labelsPath), secondReview, outputDir, parsed.labelThreshold);
     }
 
     private static void runAggregateMode(
@@ -135,6 +135,7 @@ public class Main {
         private String secondReviewLabelsPath;
         private boolean aggregateMode;
         private String outputRootPath;
+        private int labelThreshold = 3;
         private int baselineMethodsFieldsThreshold = 40;
         private int baselineDependencyTypesThreshold = 5;
 
@@ -165,6 +166,13 @@ public class Main {
                     parsed.aggregateMode = true;
                 } else if ("--output-root".equals(arg)) {
                     parsed.outputRootPath = nextArg(args, ++i, "--output-root");
+                } else if ("--label-threshold".equals(arg)) {
+                    String value = nextArg(args, ++i, "--label-threshold");
+                    parsed.labelThreshold = parsePositiveInt(value, "--label-threshold");
+                    if (parsed.labelThreshold < 1 || parsed.labelThreshold > 4) {
+                        throw new IllegalArgumentException(
+                                "--label-threshold must be between 1 and 4");
+                    }
                 } else if ("--baseline-methods-fields".equals(arg)) {
                     String value = nextArg(args, ++i, "--baseline-methods-fields");
                     parsed.baselineMethodsFieldsThreshold = parsePositiveInt(value, "--baseline-methods-fields");

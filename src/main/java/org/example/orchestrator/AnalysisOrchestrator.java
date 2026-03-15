@@ -43,6 +43,10 @@ import org.example.sonar.SonarConfig;
 public class AnalysisOrchestrator {
     private static final Logger LOGGER = Logger.getLogger(AnalysisOrchestrator.class.getName());
 
+    private static final int DEFAULT_LABEL_THRESHOLD = 3;
+    private static final int MIN_LABEL_THRESHOLD = 1;
+    private static final int MAX_LABEL_THRESHOLD = 4;
+
     @FunctionalInterface
     public interface BaselineRunner {
         List<CandidateDTO> run(Path projectRoot, BaselineThresholds thresholds) throws IOException;
@@ -315,9 +319,7 @@ public class AnalysisOrchestrator {
     // -------------------------------------------------------------------------
 
     /**
-     * Runs the full evaluation pipeline against an annotated ground-truth CSV.
-     * Each evaluation step is error-tolerant: failures are logged as warnings and
-     * the pipeline continues. Only the initial label import propagates IOException.
+     * Runs the full evaluation pipeline with the default label threshold of 3.
      *
      * @param labelsFile       annotated labeling CSV produced by the analyze phase
      * @param secondReviewFile optional second-review CSV for reliability analysis (may be null)
@@ -325,11 +327,32 @@ public class AnalysisOrchestrator {
      * @throws IOException if the labels file cannot be read
      */
     public void evaluate(Path labelsFile, Path secondReviewFile, Path outputDir) throws IOException {
-        LOGGER.info("Evaluate mode started: labelsFile=" + labelsFile);
+        evaluate(labelsFile, secondReviewFile, outputDir, DEFAULT_LABEL_THRESHOLD);
+    }
+
+    /**
+     * Runs the full evaluation pipeline with a configurable label threshold.
+     * The threshold defines how many of K1-K4 must be true for a class to count as GOD_CLASS.
+     *
+     * @param labelsFile       annotated labeling CSV
+     * @param secondReviewFile optional second-review CSV (may be null)
+     * @param outputDir        output directory
+     * @param labelThreshold   number of K1-K4 criteria required (1-4, default 3)
+     * @throws IOException              if the labels file cannot be read
+     * @throws IllegalArgumentException if labelThreshold is not in range 1-4
+     */
+    public void evaluate(Path labelsFile, Path secondReviewFile, Path outputDir,
+            int labelThreshold) throws IOException {
+        if (labelThreshold < MIN_LABEL_THRESHOLD || labelThreshold > MAX_LABEL_THRESHOLD) {
+            throw new IllegalArgumentException(
+                    "labelThreshold must be between 1 and 4, got: " + labelThreshold);
+        }
+        LOGGER.info("Evaluate mode started: labelsFile=" + labelsFile
+                + " labelThreshold=" + labelThreshold);
         Files.createDirectories(outputDir);
 
         Map<String, LabelDTO> primaryLabels = new LabelCsvImporter().importLabels(labelsFile);
-        Map<String, Boolean> groundTruth = buildGroundTruth(primaryLabels);
+        Map<String, Boolean> groundTruth = buildGroundTruth(primaryLabels, labelThreshold);
         PredictionData preds = parsePredictionData(labelsFile);
         int total = groundTruth.size();
 
@@ -340,16 +363,26 @@ public class AnalysisOrchestrator {
         ReliabilityMetrics reliability = tryReliabilityEvaluation(primaryLabels, secondReviewFile, outputDir);
         runReport(labelsFile.getFileName().toString(), total, toolMetrics, agreement, reliability, outputDir);
 
-        LOGGER.info("Evaluate mode finished: total=" + total);
+        LOGGER.info("Evaluate mode finished: total=" + total + " labelThreshold=" + labelThreshold);
     }
 
-    private Map<String, Boolean> buildGroundTruth(Map<String, LabelDTO> labels) {
+    /**
+     * Builds a ground-truth map by counting how many of K1-K4 are true per label
+     * and comparing against the given threshold.
+     */
+    Map<String, Boolean> buildGroundTruth(Map<String, LabelDTO> labels, int labelThreshold) {
         Map<String, Boolean> truth = new LinkedHashMap<>();
         for (Map.Entry<String, LabelDTO> entry : labels.entrySet()) {
-            truth.put(entry.getKey(),
-                    LabelDTO.FinalLabel.GOD_CLASS.equals(entry.getValue().getFinalLabel()));
+            LabelDTO dto = entry.getValue();
+            int trueCount = countTrue(dto.getK1()) + countTrue(dto.getK2())
+                    + countTrue(dto.getK3()) + countTrue(dto.getK4());
+            truth.put(entry.getKey(), trueCount >= labelThreshold);
         }
         return truth;
+    }
+
+    private static int countTrue(Boolean value) {
+        return Boolean.TRUE.equals(value) ? 1 : 0;
     }
 
     private Map<String, EvaluationMetrics> runToolEvaluation(
