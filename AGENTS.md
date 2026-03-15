@@ -57,7 +57,7 @@ Zeige betroffene Dateien, Methoden-Signaturen, Tests, Risiken. Warte auf Bestät
 | US-17 | P1 | ✅ | Aggregation ueber Projekte |
 | US-18 | P1 | ✅ | Aggregierter Report |
 | US-19 | P1 | ✅ | CLI --aggregate Flag |
-| US-20 | P2 | ⬜ | Sensitivitaetsanalyse |
+| US-20 | P2 | ✅ | Sensitivitaetsanalyse |
 | US-21 | P2 | ⬜ | Repo-Hygiene |
 
 ## Randbedingungen
