@@ -25,7 +25,9 @@ public class Main {
             LoggingConfigurator.configure(outputDir, true);
 
             AnalysisOrchestrator orchestrator = new AnalysisOrchestrator();
-            if (parsed.evaluateMode) {
+            if (parsed.aggregateMode) {
+                runAggregateMode(parsed, orchestrator, outputDir);
+            } else if (parsed.evaluateMode) {
                 runEvaluateMode(parsed, orchestrator, outputDir);
             } else {
                 runAnalyzeMode(parsed, orchestrator, outputDir);
@@ -55,6 +57,16 @@ public class Main {
         orchestrator.evaluate(Path.of(parsed.labelsPath), secondReview, outputDir);
     }
 
+    private static void runAggregateMode(
+            Arguments parsed, AnalysisOrchestrator orchestrator, Path outputDir) throws IOException {
+        if (parsed.outputRootPath == null || parsed.outputRootPath.isBlank()) {
+            System.err.println("--aggregate requires --output-root <dir>");
+            printUsage();
+            System.exit(2);
+        }
+        orchestrator.aggregate(Path.of(parsed.outputRootPath), outputDir);
+    }
+
     private static void runAnalyzeMode(
             Arguments parsed, AnalysisOrchestrator orchestrator, Path outputDir)
             throws IOException, InterruptedException {
@@ -78,6 +90,7 @@ public class Main {
                 + "Usage:\n"
                 + "  java -jar target/CodeSmellsDetector.jar --project <path> [options]\n"
                 + "  java -jar target/CodeSmellsDetector.jar --evaluate --labels <csv> [options]\n"
+                + "  java -jar target/CodeSmellsDetector.jar --aggregate --output-root <dir> [options]\n"
                 + "\n"
                 + "Analyze options:\n"
                 + "  --project <path>                  Source project root\n"
@@ -92,6 +105,11 @@ public class Main {
                 + "  --labels <csv>                    Annotated labeling CSV (required for --evaluate)\n"
                 + "  --second-review-labels <csv>      Second-review CSV for reliability analysis\n"
                 + "  --output <dir>                    Output directory (default: output/)\n"
+                + "\n"
+                + "Aggregate options:\n"
+                + "  --aggregate                       Run multi-project aggregation mode\n"
+                + "  --output-root <dir>               Root dir with per-project output folders\n"
+                + "  --output <dir>                    Output directory for aggregated results\n"
                 + "\n"
                 + "  --help                            Show this help\n";
         System.out.println(usage);
@@ -115,6 +133,8 @@ public class Main {
         private boolean evaluateMode;
         private String labelsPath;
         private String secondReviewLabelsPath;
+        private boolean aggregateMode;
+        private String outputRootPath;
         private int baselineMethodsFieldsThreshold = 40;
         private int baselineDependencyTypesThreshold = 5;
 
@@ -141,6 +161,10 @@ public class Main {
                     parsed.labelsPath = nextArg(args, ++i, "--labels");
                 } else if ("--second-review-labels".equals(arg)) {
                     parsed.secondReviewLabelsPath = nextArg(args, ++i, "--second-review-labels");
+                } else if ("--aggregate".equals(arg)) {
+                    parsed.aggregateMode = true;
+                } else if ("--output-root".equals(arg)) {
+                    parsed.outputRootPath = nextArg(args, ++i, "--output-root");
                 } else if ("--baseline-methods-fields".equals(arg)) {
                     String value = nextArg(args, ++i, "--baseline-methods-fields");
                     parsed.baselineMethodsFieldsThreshold = parsePositiveInt(value, "--baseline-methods-fields");

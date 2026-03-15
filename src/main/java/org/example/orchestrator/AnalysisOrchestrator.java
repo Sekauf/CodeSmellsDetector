@@ -2,6 +2,7 @@ package org.example.orchestrator;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -30,8 +31,10 @@ import org.example.labeling.LabelCsvImporter;
 import org.example.labeling.LabelDTO;
 import org.example.labeling.SecondReviewEvaluator;
 import org.example.metrics.EvaluationMetrics;
+import org.example.metrics.MetricsEngine;
 import org.example.metrics.ReliabilityMetrics;
 import org.example.reporting.MetricsSummaryCsvExporter;
+import org.example.reporting.MultiProjectAggregator;
 import org.example.reporting.ReportGenerator;
 import org.example.sampling.SamplingEngine;
 import org.example.sonar.SonarAnalyzer;
@@ -511,6 +514,100 @@ public class AnalysisOrchestrator {
 
         static PredictionData empty() {
             return new PredictionData(Set.of(), Set.of(), Set.of(), Map.of());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Aggregate mode
+    // -------------------------------------------------------------------------
+
+    private static final String METRICS_SUMMARY_FILE = "metrics_summary.csv";
+
+    /**
+     * Scans outputRoot sub-directories for metrics_summary.csv, aggregates via
+     * MultiProjectAggregator and writes aggregated_metrics.csv + aggregated_report.md.
+     *
+     * @param outputRoot root directory containing per-project sub-directories
+     * @param outputDir  target directory for aggregated output
+     * @throws IOException on read/write failure
+     */
+    public void aggregate(Path outputRoot, Path outputDir) throws IOException {
+        LOGGER.info("Aggregate mode started: outputRoot=" + outputRoot);
+        Files.createDirectories(outputDir);
+
+        Map<String, Map<String, EvaluationMetrics>> perProject = scanProjects(outputRoot);
+        if (perProject.isEmpty()) {
+            LOGGER.warning("No metrics_summary.csv files found in " + outputRoot);
+            return;
+        }
+        LOGGER.info("Aggregate: found " + perProject.size() + " projects");
+
+        Map<String, MultiProjectAggregator.AggregatedMetrics> aggregated =
+                MultiProjectAggregator.aggregate(perProject);
+        MultiProjectAggregator.exportCsv(aggregated, outputDir);
+
+        Map<String, List<OverlapResult>> agreementPerProject = Map.of();
+        new ReportGenerator().generateAggregated(
+                aggregated, perProject, agreementPerProject, outputDir);
+
+        LOGGER.info("Aggregate mode finished: outputDir=" + outputDir);
+    }
+
+    private Map<String, Map<String, EvaluationMetrics>> scanProjects(
+            Path outputRoot) throws IOException {
+        Map<String, Map<String, EvaluationMetrics>> perProject = new LinkedHashMap<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(outputRoot)) {
+            for (Path entry : stream) {
+                if (!Files.isDirectory(entry)) {
+                    continue;
+                }
+                Path csvFile = entry.resolve(METRICS_SUMMARY_FILE);
+                if (!Files.exists(csvFile)) {
+                    continue;
+                }
+                String projectName = entry.getFileName().toString();
+                Map<String, EvaluationMetrics> metrics = parseMetricsSummaryCsv(csvFile);
+                if (!metrics.isEmpty()) {
+                    perProject.put(projectName, metrics);
+                }
+            }
+        }
+        return perProject;
+    }
+
+    private Map<String, EvaluationMetrics> parseMetricsSummaryCsv(
+            Path csvFile) throws IOException {
+        List<String> lines = Files.readAllLines(csvFile, StandardCharsets.UTF_8);
+        if (lines.size() < 2) {
+            return Map.of();
+        }
+        Map<String, EvaluationMetrics> result = new LinkedHashMap<>();
+        for (int i = 1; i < lines.size(); i++) {
+            String line = lines.get(i).trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            parseMetricsSummaryRow(line, result);
+        }
+        return result;
+    }
+
+    private void parseMetricsSummaryRow(
+            String line, Map<String, EvaluationMetrics> result) {
+        String[] parts = line.split(",");
+        if (parts.length < 10) {
+            LOGGER.warning("Skipping malformed metrics row: " + line);
+            return;
+        }
+        try {
+            String tool = parts[0].trim();
+            int tp = Integer.parseInt(parts[6].trim());
+            int fp = Integer.parseInt(parts[7].trim());
+            int fn = Integer.parseInt(parts[8].trim());
+            int tn = Integer.parseInt(parts[9].trim());
+            result.put(tool, MetricsEngine.computeMetrics(tp, fp, fn, tn));
+        } catch (NumberFormatException e) {
+            LOGGER.warning("Skipping row with invalid numbers: " + line);
         }
     }
 }
