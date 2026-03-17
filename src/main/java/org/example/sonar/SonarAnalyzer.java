@@ -14,6 +14,9 @@ public class SonarAnalyzer {
     private static final String RULE_KEY = "java:S6539";
     private static final int OUTPUT_TAIL_LINES = 30;
 
+    /** Wait time when ceTaskId is unavailable. Package-private to allow override in tests. */
+    long fallbackWaitMillis = 15_000L;
+
     private final SonarDockerManager dockerManager;
     private final SonarScannerRunner scannerRunner;
     private final SonarIssuesClient issuesClient;
@@ -103,7 +106,11 @@ public class SonarAnalyzer {
                     2000
             );
         } else {
-            LOGGER.warning("SonarQube scan output did not include ceTaskId; fetching issues without waiting.");
+            LOGGER.warning("SonarQube scan output did not include ceTaskId; waiting "
+                    + fallbackWaitMillis + "ms for server-side analysis.");
+            if (fallbackWaitMillis > 0) {
+                Thread.sleep(fallbackWaitMillis);
+            }
         }
 
         List<SonarIssue> issues;
@@ -164,7 +171,11 @@ public class SonarAnalyzer {
                     2000
             );
         } else {
-            LOGGER.warning("SonarQube scan output did not include ceTaskId; fetching issues without waiting.");
+            LOGGER.warning("SonarQube scan output did not include ceTaskId; waiting "
+                    + fallbackWaitMillis + "ms for server-side analysis.");
+            if (fallbackWaitMillis > 0) {
+                Thread.sleep(fallbackWaitMillis);
+            }
         }
         List<SonarIssue> issues = issuesClient.fetchIssues(config);
         List<CandidateDTO> candidates = mapper.mapIssues(projectRoot, issues, config.getProjectKey());

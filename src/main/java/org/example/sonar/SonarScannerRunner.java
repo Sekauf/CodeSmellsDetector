@@ -39,6 +39,12 @@ public class SonarScannerRunner {
         LOGGER.info("Starting SonarQube scan using " + mode + " in " + projectRoot);
         CommandResult result = runCommand(cmd, projectRoot, 1800);
         String ceTaskId = parseCeTaskIdFromOutput(result.output);
+        if (ceTaskId == null) {
+            ceTaskId = parseCeTaskIdFromReportFile(projectRoot);
+            if (ceTaskId != null) {
+                LOGGER.info("ceTaskId resolved from report-task.txt: " + ceTaskId);
+            }
+        }
         LOGGER.info("SonarQube scan finished. exitCode=" + result.exitCode);
         return new SonarScanResult(result.exitCode, result.output, ceTaskId);
     }
@@ -56,7 +62,7 @@ public class SonarScannerRunner {
             cmd.add("-Dproject.settings=" + propertiesFile.toAbsolutePath());
         } else {
             cmd.add(resolveMavenCommand());
-            cmd.add("-q");
+            cmd.add("-B");
             cmd.add("-DskipTests");
             cmd.add(resolveMavenGoal());
             cmd.add("-Dsonar.projectKey=" + projectKey);
@@ -152,6 +158,39 @@ public class SonarScannerRunner {
             this.exitCode = exitCode;
             this.output = output;
         }
+    }
+
+    /**
+     * Reads the ceTaskId from the report-task.txt file written by the SonarQube scanner.
+     * Checks Maven location (target/sonar/report-task.txt) first,
+     * then sonar-scanner location (.scannerwork/report-task.txt).
+     * Returns null if no file exists or no ceTaskId line is found.
+     */
+    String parseCeTaskIdFromReportFile(Path projectRoot) {
+        Path[] candidates = {
+            projectRoot.resolve("target").resolve("sonar").resolve("report-task.txt"),
+            projectRoot.resolve(".scannerwork").resolve("report-task.txt")
+        };
+        for (Path reportFile : candidates) {
+            if (!Files.exists(reportFile)) {
+                continue;
+            }
+            LOGGER.fine("Reading ceTaskId from: " + reportFile);
+            try {
+                List<String> lines = Files.readAllLines(reportFile, StandardCharsets.UTF_8);
+                for (String line : lines) {
+                    if (line.startsWith("ceTaskId=")) {
+                        String value = line.substring("ceTaskId=".length()).trim();
+                        if (!value.isBlank()) {
+                            return value;
+                        }
+                    }
+                }
+            } catch (IOException ex) {
+                LOGGER.fine("Could not read report-task.txt: " + ex.getMessage());
+            }
+        }
+        return null;
     }
 
     String parseCeTaskIdFromOutput(String output) {

@@ -269,4 +269,127 @@ public class JDeodorantImporterTest {
         }
         throw new AssertionError("Expected IllegalArgumentException for missing smell column.");
     }
+
+    // --- Inner-class collapsing tests ---
+
+    @Test
+    public void import_innerClassCollapsedToOuterType() throws IOException {
+        Path dir = temporaryFolder.newFolder("jdeo-inner").toPath();
+        Path csvPath = dir.resolve("jdeo.csv");
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("Class,Smell\n");
+        builder.append("com.example.Outer.Inner,God Class\n");
+        Files.writeString(csvPath, builder.toString(), StandardCharsets.UTF_8);
+
+        JDeodorantImporter importer = new JDeodorantImporter();
+        List<CandidateDTO> result = importer.importJDeodorantCsv(csvPath.toString());
+
+        assertEquals(1, result.size());
+        assertEquals("com.example.Outer", result.get(0).getFullyQualifiedClassName());
+        assertEquals(true, result.get(0).isJdeodorantFlag());
+    }
+
+    @Test
+    public void import_multipleInnerClassesMergeToSameOuter() throws IOException {
+        Path dir = temporaryFolder.newFolder("jdeo-multi-inner").toPath();
+        Path csvPath = dir.resolve("jdeo.csv");
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("Class,Smell\n");
+        builder.append("com.example.Builder.FieldFormatter,God Class\n");
+        builder.append("com.example.Builder.Separator,God Class\n");
+        builder.append("com.example.Builder,God Class\n");
+        Files.writeString(csvPath, builder.toString(), StandardCharsets.UTF_8);
+
+        JDeodorantImporter importer = new JDeodorantImporter();
+        List<CandidateDTO> result = importer.importJDeodorantCsv(csvPath.toString());
+
+        assertEquals(1, result.size());
+        assertEquals("com.example.Builder", result.get(0).getFullyQualifiedClassName());
+    }
+
+    @Test
+    public void import_deeplyNestedInnerClassCollapsed() throws IOException {
+        Path dir = temporaryFolder.newFolder("jdeo-deep").toPath();
+        Path csvPath = dir.resolve("jdeo.csv");
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("Class,Smell\n");
+        builder.append("com.example.alpha.Outer.Mid.Inner,God Class\n");
+        Files.writeString(csvPath, builder.toString(), StandardCharsets.UTF_8);
+
+        JDeodorantImporter importer = new JDeodorantImporter();
+        List<CandidateDTO> result = importer.importJDeodorantCsv(csvPath.toString());
+
+        assertEquals(1, result.size());
+        assertEquals("com.example.alpha.Outer", result.get(0).getFullyQualifiedClassName());
+    }
+
+    @Test
+    public void import_topLevelClassUnchanged() throws IOException {
+        Path dir = temporaryFolder.newFolder("jdeo-toplevel").toPath();
+        Path csvPath = dir.resolve("jdeo.csv");
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("Class,Smell\n");
+        builder.append("com.example.TopLevel,God Class\n");
+        Files.writeString(csvPath, builder.toString(), StandardCharsets.UTF_8);
+
+        JDeodorantImporter importer = new JDeodorantImporter();
+        List<CandidateDTO> result = importer.importJDeodorantCsv(csvPath.toString());
+
+        assertEquals(1, result.size());
+        assertEquals("com.example.TopLevel", result.get(0).getFullyQualifiedClassName());
+    }
+
+    @Test
+    public void import_noPackageInnerClassCollapsed() throws IOException {
+        Path dir = temporaryFolder.newFolder("jdeo-nopkg").toPath();
+        Path csvPath = dir.resolve("jdeo.csv");
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("Class,Smell\n");
+        builder.append("Outer.Inner,God Class\n");
+        Files.writeString(csvPath, builder.toString(), StandardCharsets.UTF_8);
+
+        JDeodorantImporter importer = new JDeodorantImporter();
+        List<CandidateDTO> result = importer.importJDeodorantCsv(csvPath.toString());
+
+        assertEquals(1, result.size());
+        assertEquals("Outer", result.get(0).getFullyQualifiedClassName());
+    }
+
+    @Test
+    public void import_mixedInnerAndTopLevel_correctDedup() throws IOException {
+        Path dir = temporaryFolder.newFolder("jdeo-mixed").toPath();
+        Path csvPath = dir.resolve("jdeo.csv");
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("Class,Smell\n");
+        builder.append("com.example.Alpha,God Class\n");
+        builder.append("com.example.Beta.Inner,God Class\n");
+        builder.append("com.example.Gamma,God Class\n");
+        builder.append("com.example.Alpha.Nested,God Class\n");
+        Files.writeString(csvPath, builder.toString(), StandardCharsets.UTF_8);
+
+        JDeodorantImporter importer = new JDeodorantImporter();
+        List<CandidateDTO> result = importer.importJDeodorantCsv(csvPath.toString());
+
+        assertEquals(3, result.size());
+        assertEquals("com.example.Alpha", result.get(0).getFullyQualifiedClassName());
+        assertEquals("com.example.Beta", result.get(1).getFullyQualifiedClassName());
+        assertEquals("com.example.Gamma", result.get(2).getFullyQualifiedClassName());
+    }
+
+    @Test
+    public void collapseInnerClass_variousCases() {
+        assertEquals("com.example.Outer", JDeodorantImporter.collapseInnerClass("com.example.Outer.Inner"));
+        assertEquals("com.example.Outer", JDeodorantImporter.collapseInnerClass("com.example.Outer.Mid.Inner"));
+        assertEquals("com.example.Outer", JDeodorantImporter.collapseInnerClass("com.example.Outer"));
+        assertEquals("Outer", JDeodorantImporter.collapseInnerClass("Outer.Inner"));
+        assertEquals("Outer", JDeodorantImporter.collapseInnerClass("Outer"));
+        assertEquals("", JDeodorantImporter.collapseInnerClass(""));
+        assertEquals(null, JDeodorantImporter.collapseInnerClass(null));
+    }
 }
