@@ -48,6 +48,7 @@ public class SonarAnalyzerTest {
                 new SonarS6539Mapper(),
                 healthClient
         );
+        analyzer.fallbackWaitMillis = 0;
 
         List<CandidateDTO> candidates = analyzer.runSonarAndFetchResults("C:\\tmp\\demo-project");
         Assert.assertEquals(1, candidates.size());
@@ -111,6 +112,7 @@ public class SonarAnalyzerTest {
                 new SonarS6539Mapper(),
                 healthClient
         );
+        analyzer.fallbackWaitMillis = 0;
 
         List<CandidateDTO> candidates = analyzer.runSonarAndFetchResults("C:\\tmp\\demo-project");
         Assert.assertTrue(candidates.isEmpty());

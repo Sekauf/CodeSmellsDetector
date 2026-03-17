@@ -94,6 +94,7 @@ public class JDeodorantImporter {
         }
 
         Map<String, CandidateDTO> candidates = new HashMap<>();
+        int collapsedCount = 0;
         for (int i = headerIndex + 1; i < lines.size(); i++) {
             String line = lines.get(i);
             if (line.trim().isEmpty()) {
@@ -101,6 +102,12 @@ public class JDeodorantImporter {
             }
             List<String> fields = parseCsvLine(line, delimiter);
             String fqn = value(fields, classIndex);
+            String collapsed = collapseInnerClass(fqn);
+            if (collapsed != null && !collapsed.equals(fqn)) {
+                LOGGER.fine("Collapsed inner class: " + fqn + " -> " + collapsed);
+                collapsedCount++;
+            }
+            fqn = collapsed;
             if (fqn == null || fqn.isBlank()) {
                 continue;
             }
@@ -113,7 +120,8 @@ public class JDeodorantImporter {
 
         List<CandidateDTO> result = new ArrayList<>(candidates.values());
         result.sort(Comparator.comparing(CandidateDTO::getFullyQualifiedClassName));
-        LOGGER.info("JDeodorant CSV import finished. Candidates=" + result.size());
+        LOGGER.info("JDeodorant CSV import finished. Candidates=" + result.size()
+                + " (innerClassesCollapsed=" + collapsedCount + ")");
         return result;
     }
 
@@ -273,6 +281,44 @@ public class JDeodorantImporter {
         if (first != null && !first.isEmpty() && first.charAt(0) == '\uFEFF') {
             headerFields.set(0, first.substring(1));
         }
+    }
+
+    /**
+     * Collapses an inner-class FQN to its enclosing top-level type.
+     * <p>
+     * Heuristic: Segments starting with an uppercase letter are treated as type names
+     * (per Java naming conventions — packages are lowercase). The first such segment
+     * is kept as the top-level type; all subsequent segments are dropped.
+     * <p>
+     * Examples:
+     * <ul>
+     *   <li>{@code com.example.Outer.Inner} → {@code com.example.Outer}</li>
+     *   <li>{@code a.b.Outer.Mid.Inner}     → {@code a.b.Outer}</li>
+     *   <li>{@code com.example.TopLevel}    → {@code com.example.TopLevel} (unchanged)</li>
+     *   <li>{@code Outer.Inner}             → {@code Outer}</li>
+     *   <li>empty / null                    → returned unchanged</li>
+     * </ul>
+     */
+    static String collapseInnerClass(String fqn) {
+        if (fqn == null || fqn.isEmpty()) {
+            return fqn;
+        }
+        String[] segments = fqn.split("\\.", -1);
+        StringBuilder result = new StringBuilder();
+        for (String seg : segments) {
+            if (!seg.isEmpty() && Character.isUpperCase(seg.charAt(0))) {
+                if (result.length() > 0) {
+                    result.append('.');
+                }
+                result.append(seg);
+                return result.toString();
+            }
+            if (result.length() > 0) {
+                result.append('.');
+            }
+            result.append(seg);
+        }
+        return fqn;
     }
 
     List<String> parseCsvLine(String line, char delimiter) {
