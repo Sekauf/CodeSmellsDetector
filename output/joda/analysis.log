@@ -1,0 +1,9 @@
+INFO org.example.orchestrator.AnalysisOrchestrator - Orchestrator started.
+INFO org.example.orchestrator.AnalysisOrchestrator - BaselineAnalyzer started.
+INFO org.example.baseline.BaselineAnalyzer - Baseline analysis started.
+INFO org.example.baseline.BaselineAnalyzer - Baseline analysis parsed types=400
+INFO org.example.baseline.BaselineAnalyzer - Baseline analysis finished in 8198 ms. Files=166 Types=400 Candidates=146
+INFO org.example.orchestrator.AnalysisOrchestrator - BaselineAnalyzer finished. candidates=146
+INFO org.example.orchestrator.AnalysisOrchestrator - SonarAnalyzer started.
+INFO org.example.sonar.SonarAnalyzer - SonarQube analysis started.
+INFO org.example.sonar.SonarScannerRunner - Starting SonarQube scan using SONAR_SCANNER in F:\Bachelor Auswertung\joda-time-main

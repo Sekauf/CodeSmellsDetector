@@ -14,9 +14,24 @@ CLI-Toolkit zur Evaluierung von God-Class-Detektoren auf Java-Projekten. Das Too
 - Java 17
 - Maven 3.9+
 - Optional fuer SonarQube-Lauf:
-  - laufender SonarQube-Server (Default: `http://localhost:9000`)
-  - optional `SONAR_TOKEN`
-  - optional `SONAR_DOCKER_ENABLED=true`
+
+  ### SonarQube-Setup
+
+  1. Docker-Compose starten:
+     ```bash
+     docker compose up -d
+     ```
+  2. Warten bis SonarQube bereit ist:
+     ```bash
+     ./scripts/sonar_wait_ready.sh
+     # Windows:
+     ./scripts/sonar_wait_ready.ps1
+     ```
+  3. `SONAR_TOKEN` als Umgebungsvariable setzen:
+     ```bash
+     export SONAR_TOKEN=<token>
+     ```
+     Hinweis: Token **nicht** direkt im Code hardcodieren.
 - Optional fuer JDeodorant:
   - vorhandener JDeodorant-CSV-Export
 
@@ -38,6 +53,21 @@ Hinweis: Die CLI kann direkt ueber die Main-Klasse gestartet werden. Das ist rob
 ```bash
 java -cp target/classes org.example.cli.Main --help
 ```
+
+## GUI starten
+
+```bash
+java -jar target/CodeSmellsDetector-gui.jar
+```
+
+Features:
+
+- Dreistufiger Workflow: SETUP → PROGRESS → RESULTS
+- One-Click-Analyse (Baseline, SonarQube, JDeodorant konfigurierbar)
+- Inline-Labeling direkt in der Ergebnistabelle (K1-K4, FinalLabel)
+- Evaluation und Reliabilitaetsanalyse per Knopfdruck
+- Export-Dialog fuer CSV/JSON/Markdown-Report
+- Venn-Diagramm der Tool-Uebereinstimmung
 
 ## CLI Usage
 
@@ -83,6 +113,7 @@ Optionen:
 - `--labels <csv>` annotierte Labeling-CSV (Pflicht)
 - `--second-review-labels <csv>` zweite Bewertung fuer Reliabilitaet (optional)
 - `--output <dir>` Ausgabeverzeichnis (Default: `output/`)
+- `--label-threshold <n>` Schwellenwert fuer positive Labels (1-4, Default: `3`)
 
 Beispiel mit Second Review:
 
@@ -93,6 +124,49 @@ java -cp target/classes org.example.cli.Main \
   --second-review-labels output/second_review.csv \
   --output output
 ```
+
+### Aggregate-Modus
+
+```bash
+java -cp target/classes org.example.cli.Main \
+  --aggregate \
+  --output-root output/ \
+  --output output/aggregated
+```
+
+Optionen:
+
+- `--aggregate` Multi-Projekt-Aggregation aktivieren
+- `--output-root <dir>` Wurzelverzeichnis mit Projektunterordnern (Pflicht)
+- `--output <dir>` Ausgabeverzeichnis fuer aggregierte Ergebnisse
+
+## Batch-Modus
+
+```bash
+./scripts/run_batch.sh
+```
+
+- Fuehrt die Analyse fuer mehrere Projekte sequenziell aus
+- Konfiguration via Variablen `JAR`, `OUTPUT_BASE` sowie `PROJECTS`/`PATHS`/`JD_CSVS`-Arrays im Skript
+- Jedes Projekt erhaelt ein eigenes Unterverzeichnis unter `OUTPUT_BASE`
+
+## Projektstruktur
+
+| Package | Beschreibung |
+|---------|-------------|
+| `baseline` | God-Class-Erkennung per Metrik-Schwellenwerte |
+| `sonar` | SonarQube-Integration (Scanner, API, Mapper) |
+| `jdeodorant` | Import von JDeodorant-CSV-Exporten |
+| `evaluation` | Metriken (Precision, Recall, F1, MCC, Reliability) |
+| `gui` | Swing-GUI (28 Klassen, SETUP-PROGRESS-RESULTS) |
+| `cli` | Argument-Parsing und Einstiegspunkt |
+| `orchestrator` | Koordination der Analyse-Pipeline |
+| `export` | CSV/JSON-Export |
+| `reporting` | Markdown-Report-Generierung |
+| `labeling` | Labeling-Artefakte und Persistenz |
+| `sampling` | Blind-Negative-Sampling (Seed 42) |
+| `metrics` | Metrik-Berechnungen |
+| `logging` | Logging-Konfiguration |
 
 ## Pipeline
 

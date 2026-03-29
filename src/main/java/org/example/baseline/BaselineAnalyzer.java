@@ -49,6 +49,11 @@ public class BaselineAnalyzer {
             String source = Files.readString(javaFile, StandardCharsets.UTF_8);
             ClassMetrics metrics = calculator.calculateFromSource(source);
             String fqn = metrics.getFullyQualifiedName();
+            String simpleName = fqn.contains(".") ? fqn.substring(fqn.lastIndexOf('.') + 1) : fqn;
+            if (simpleName.isEmpty() || !Character.isUpperCase(simpleName.charAt(0)) || "UnknownType".equals(simpleName)) {
+                LOGGER.warning("Skipping invalid type name: " + fqn + " in " + javaFile);
+                continue;
+            }
 
             boolean exceedsSize = (metrics.getMethodCount() + metrics.getFieldCount())
                     > thresholds.getMethodPlusFieldThreshold();

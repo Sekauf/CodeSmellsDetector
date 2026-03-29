@@ -1,0 +1,31 @@
+INFO org.example.orchestrator.AnalysisOrchestrator - Orchestrator started.
+INFO org.example.orchestrator.AnalysisOrchestrator - BaselineAnalyzer started.
+INFO org.example.baseline.BaselineAnalyzer - Baseline analysis started.
+INFO org.example.baseline.BaselineAnalyzer - Baseline analysis parsed types=400
+INFO org.example.baseline.BaselineAnalyzer - Baseline analysis finished in 7898 ms. Files=166 Types=400 Candidates=146
+INFO org.example.orchestrator.AnalysisOrchestrator - BaselineAnalyzer finished. candidates=146
+INFO org.example.orchestrator.AnalysisOrchestrator - SonarAnalyzer started.
+INFO org.example.sonar.SonarAnalyzer - SonarQube analysis started.
+INFO org.example.sonar.SonarScannerRunner - Starting SonarQube scan using MAVEN in F:\Bachelor Auswertung\joda-time-main\joda-time-main
+INFO org.example.sonar.SonarScannerRunner - SonarQube scan finished. exitCode=0
+WARNING org.example.sonar.SonarAnalyzer - SonarQube scan output did not include ceTaskId; fetching issues without waiting.
+INFO org.example.sonar.SonarIssuesClient - Fetched SonarQube issues for rule java:S6539: 0
+INFO org.example.sonar.SonarAnalyzer - SonarQube analysis finished in 38906 ms. Issues=0 Candidates=0
+INFO org.example.orchestrator.AnalysisOrchestrator - SonarAnalyzer finished. candidates=0
+INFO org.example.orchestrator.AnalysisOrchestrator - JDeodorantIntegration started.
+INFO org.example.jdeodorant.JDeodorantIntegration - JDeodorant candidate fetch started.
+INFO org.example.jdeodorant.JDeodorantIntegration - JDeodorant manual CSV path used.
+INFO org.example.jdeodorant.JDeodorantImporter - JDeodorant manual CSV import used: F:\Bachelor Auswertung\Auwertungen\jdeodorant_joda-time.csv
+INFO org.example.jdeodorant.JDeodorantImporter - JDeodorant CSV import finished. Candidates=14
+INFO org.example.jdeodorant.JDeodorantIntegration - JDeodorant candidate fetch finished. Candidates=14
+INFO org.example.orchestrator.AnalysisOrchestrator - JDeodorantIntegration finished. candidates=14
+INFO org.example.export.ResultExporter - Export started: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\joda\results.csv
+INFO org.example.export.ResultExporter - Export finished: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\joda\results.csv entries=129
+INFO org.example.export.ResultExporter - Export started: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\joda\results.json
+INFO org.example.export.ResultExporter - Export finished: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\joda\results.json entries=129
+INFO org.example.orchestrator.AnalysisOrchestrator - BlindNegativeSampling started. pool=129 detected=14
+INFO org.example.sampling.SamplingEngine - SamplingEngine.sampleBlindNegativesTopPercentile seed=42 input=129 detected=14 undetected=115 requested=5 returned=5 percentile=0.1 bucket=12
+INFO org.example.orchestrator.AnalysisOrchestrator - BlindNegativeSampling finished. blindSamples=5
+INFO org.example.labeling.LabelCsvExporter - LabelCsvExporter started: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\joda\labeling_input.csv candidates=19
+INFO org.example.labeling.LabelCsvExporter - LabelCsvExporter finished: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\joda\labeling_input.csv rows=19
+INFO org.example.orchestrator.AnalysisOrchestrator - Orchestrator finished. candidates=19

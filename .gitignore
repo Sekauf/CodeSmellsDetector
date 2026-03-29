@@ -34,9 +34,6 @@ build/
 ### Mac OS ###
 .DS_Store
 
-# Analyse-Output (contains local paths)
-output/
-
 # Environment / credentials
 .env
 .env.*
@@ -44,3 +41,4 @@ output/
 # Local run scripts with tokens
 run-gui.bat
 
+/.claude/
