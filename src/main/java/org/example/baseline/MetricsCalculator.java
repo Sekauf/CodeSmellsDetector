@@ -11,10 +11,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MetricsCalculator {
+    private static final Logger LOGGER = Logger.getLogger(MetricsCalculator.class.getName());
     private static final Pattern PACKAGE_PATTERN = Pattern.compile("\\bpackage\\s+([\\w\\.]+)\\s*;");
     private static final Pattern TYPE_PATTERN = Pattern.compile("\\b(class|interface|enum)\\s+([A-Za-z_\\$][\\w\\$]*)");
     private static final Pattern IMPORT_PATTERN = Pattern.compile("^\\s*import\\s+([\\w\\.]+)\\s*;", Pattern.MULTILINE);
@@ -52,6 +54,11 @@ public class MetricsCalculator {
     public ClassMetrics calculateFromSource(String source) {
         String packageName = extractPackage(source);
         String className = extractPrimaryTypeName(source);
+        if (className.isEmpty() || !Character.isUpperCase(className.charAt(0))) {
+            LOGGER.warning("Skipping invalid primary type name: " + className);
+            String unknownFqn = packageName.isEmpty() ? "UnknownType" : packageName + ".UnknownType";
+            return new ClassMetrics(unknownFqn, 0, 0, 0);
+        }
         String fqn = packageName.isEmpty() ? className : packageName + "." + className;
 
         String classBody = extractPrimaryTypeBody(source);
@@ -177,7 +184,8 @@ public class MetricsCalculator {
     }
 
     private String extractPrimaryTypeName(String source) {
-        Matcher matcher = TYPE_PATTERN.matcher(source);
+        String stripped = SourceUtils.stripCommentsAndStrings(source);
+        Matcher matcher = TYPE_PATTERN.matcher(stripped);
         if (matcher.find()) {
             return matcher.group(2);
         }
@@ -185,7 +193,8 @@ public class MetricsCalculator {
     }
 
     private String extractPrimaryTypeBody(String source) {
-        Matcher matcher = TYPE_PATTERN.matcher(source);
+        String stripped = SourceUtils.stripCommentsAndStrings(source);
+        Matcher matcher = TYPE_PATTERN.matcher(stripped);
         if (!matcher.find()) {
             return "";
         }

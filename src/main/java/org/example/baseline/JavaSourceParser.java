@@ -154,7 +154,8 @@ public class JavaSourceParser {
 
         List<ParsedType> parsed = new ArrayList<>();
         Deque<TypeEntry> stack = new ArrayDeque<>();
-        Matcher typeMatcher = TYPE_PATTERN.matcher(source);
+        String strippedSource = SourceUtils.stripCommentsAndStrings(source);
+        Matcher typeMatcher = TYPE_PATTERN.matcher(strippedSource);
         while (typeMatcher.find()) {
             String kind = typeMatcher.group(1).toLowerCase(Locale.ROOT);
             String name = typeMatcher.group(2);

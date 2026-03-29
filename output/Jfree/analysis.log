@@ -1,0 +1,32 @@
+INFO org.example.orchestrator.AnalysisOrchestrator - Orchestrator started.
+INFO org.example.orchestrator.AnalysisOrchestrator - BaselineAnalyzer started.
+INFO org.example.baseline.BaselineAnalyzer - Baseline analysis started.
+INFO org.example.baseline.BaselineAnalyzer - Baseline analysis parsed types=1001
+INFO org.example.baseline.BaselineAnalyzer - Baseline analysis finished in 18740 ms. Files=666 Types=1001 Candidates=483
+INFO org.example.orchestrator.AnalysisOrchestrator - BaselineAnalyzer finished. candidates=483
+INFO org.example.orchestrator.AnalysisOrchestrator - SonarAnalyzer started.
+INFO org.example.sonar.SonarAnalyzer - SonarQube analysis started.
+INFO org.example.sonar.SonarScannerRunner - Starting SonarQube scan using MAVEN in F:\Bachelor Auswertung\jfreechart-master\jfreechart-master
+INFO org.example.sonar.SonarScannerRunner - SonarQube scan finished. exitCode=0
+WARNING org.example.sonar.SonarAnalyzer - SonarQube scan output did not include ceTaskId; fetching issues without waiting.
+INFO org.example.sonar.SonarIssuesClient - Fetched SonarQube issues for rule java:S6539: 2
+INFO org.example.sonar.SonarS6539Mapper - SonarS6539Mapper mapped=2 unresolved=0 totalIssues=2
+INFO org.example.sonar.SonarAnalyzer - SonarQube analysis finished in 109413 ms. Issues=2 Candidates=2
+INFO org.example.orchestrator.AnalysisOrchestrator - SonarAnalyzer finished. candidates=2
+INFO org.example.orchestrator.AnalysisOrchestrator - JDeodorantIntegration started.
+INFO org.example.jdeodorant.JDeodorantIntegration - JDeodorant candidate fetch started.
+INFO org.example.jdeodorant.JDeodorantIntegration - JDeodorant manual CSV path used.
+INFO org.example.jdeodorant.JDeodorantImporter - JDeodorant manual CSV import used: F:\Bachelor Auswertung\Auwertungen\jdeodorant_jfreechart.csv
+INFO org.example.jdeodorant.JDeodorantImporter - JDeodorant CSV import finished. Candidates=67
+INFO org.example.jdeodorant.JDeodorantIntegration - JDeodorant candidate fetch finished. Candidates=67
+INFO org.example.orchestrator.AnalysisOrchestrator - JDeodorantIntegration finished. candidates=67
+INFO org.example.export.ResultExporter - Export started: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\Jfree\results.csv
+INFO org.example.export.ResultExporter - Export finished: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\Jfree\results.csv entries=456
+INFO org.example.export.ResultExporter - Export started: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\Jfree\results.json
+INFO org.example.export.ResultExporter - Export finished: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\Jfree\results.json entries=456
+INFO org.example.orchestrator.AnalysisOrchestrator - BlindNegativeSampling started. pool=456 detected=67
+INFO org.example.sampling.SamplingEngine - SamplingEngine.sampleBlindNegativesTopPercentile seed=42 input=456 detected=67 undetected=389 requested=5 returned=5 percentile=0.1 bucket=39
+INFO org.example.orchestrator.AnalysisOrchestrator - BlindNegativeSampling finished. blindSamples=5
+INFO org.example.labeling.LabelCsvExporter - LabelCsvExporter started: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\Jfree\labeling_input.csv candidates=72
+INFO org.example.labeling.LabelCsvExporter - LabelCsvExporter finished: F:\Bachelor Auswertung\Auwertungen\Auswertung Projekt\Jfree\labeling_input.csv rows=72
+INFO org.example.orchestrator.AnalysisOrchestrator - Orchestrator finished. candidates=72

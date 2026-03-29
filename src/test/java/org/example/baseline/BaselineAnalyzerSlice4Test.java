@@ -122,6 +122,34 @@ public class BaselineAnalyzerSlice4Test {
     }
 
     @Test
+    public void skipsInvalidTypeNames() throws IOException {
+        Path projectRoot = temporaryFolder.newFolder("artefact-test").toPath();
+        Path mainJava = projectRoot.resolve("src").resolve("main").resolve("java");
+        Path pkg = mainJava.resolve("org").resolve("example");
+        Files.createDirectories(pkg);
+
+        String source = ""
+                + "package org.example;\n"
+                + "/**\n"
+                + " * Values should class as valid input.\n"
+                + " */\n"
+                + "public class SmallValid {\n"
+                + "  public void a() {}\n"
+                + "}\n";
+        Files.writeString(pkg.resolve("SmallValid.java"), source, StandardCharsets.UTF_8);
+
+        BaselineAnalyzer analyzer = new BaselineAnalyzer();
+        BaselineThresholds thresholds = new BaselineThresholds(1, 1);
+        List<CandidateDTO> candidates = analyzer.analyze(projectRoot, thresholds);
+
+        for (CandidateDTO c : candidates) {
+            assertTrue("FQN should start with uppercase simple name, got: " + c.getFullyQualifiedClassName(),
+                    Character.isUpperCase(c.getFullyQualifiedClassName()
+                            .substring(c.getFullyQualifiedClassName().lastIndexOf('.') + 1).charAt(0)));
+        }
+    }
+
+    @Test
     public void producesMetadata() throws IOException {
         Path projectRoot = temporaryFolder.newFolder("project4").toPath();
         Path mainJava = projectRoot.resolve("src").resolve("main").resolve("java");

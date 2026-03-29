@@ -5,6 +5,56 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 public class MetricsCalculatorTest {
+
+    @Test
+    public void javadocWithClassKeywordDoesNotProduceArtefact() {
+        String source = ""
+                + "package org.joda.time.field;\n"
+                + "/**\n"
+                + " * The value should class as valid.\n"
+                + " */\n"
+                + "public class ValidField {\n"
+                + "  private int value;\n"
+                + "  public void process() {}\n"
+                + "}\n";
+
+        MetricsCalculator calculator = new MetricsCalculator();
+        ClassMetrics metrics = calculator.calculateFromSource(source);
+
+        assertEquals("org.joda.time.field.ValidField", metrics.getFullyQualifiedName());
+        assertEquals(1, metrics.getMethodCount());
+    }
+
+    @Test
+    public void lineCommentWithClassKeywordIgnored() {
+        String source = ""
+                + "package com.example;\n"
+                + "// this class should be refactored\n"
+                + "public class Actual {\n"
+                + "  public void run() {}\n"
+                + "}\n";
+
+        MetricsCalculator calculator = new MetricsCalculator();
+        ClassMetrics metrics = calculator.calculateFromSource(source);
+
+        assertEquals("com.example.Actual", metrics.getFullyQualifiedName());
+    }
+
+    @Test
+    public void stringLiteralWithClassKeywordIgnored() {
+        String source = ""
+                + "package com.example;\n"
+                + "public class Real {\n"
+                + "  private String msg = \"this class is fake\";\n"
+                + "  public void run() {}\n"
+                + "}\n";
+
+        MetricsCalculator calculator = new MetricsCalculator();
+        ClassMetrics metrics = calculator.calculateFromSource(source);
+
+        assertEquals("com.example.Real", metrics.getFullyQualifiedName());
+    }
+
     @Test
     public void countsMethodsFieldsAndImports() {
         String source = ""
