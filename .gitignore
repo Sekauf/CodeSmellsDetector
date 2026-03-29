@@ -37,9 +37,6 @@ build/
 # Analyse-Output (contains local paths)
 output/
 
-# Local artifacts
-mnt/
-
 # Environment / credentials
 .env
 .env.*
@@ -47,14 +44,3 @@ mnt/
 # Local run scripts with tokens
 run-gui.bat
 
-# Maven Shade plugin artifact
-dependency-reduced-pom.xml
-
-# Claude Code / AI tooling (local only)
-.claude/
-AGENTS.md
-CLAUDE.md
-PROMPTS.md
-SKILL.md
-WORKFLOW.md
-REFERENCE.md
